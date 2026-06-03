@@ -34,7 +34,7 @@ struct MatchSummary {
 struct DeviceState {
   ScreenState screen = ScreenState::kBoot;
   String serverHost;
-  uint16_t serverPort = 8020;
+  uint16_t serverPort = 8674;
   MatchSummary latestMatch;
   String latestOcrText;
   int editableQuantity = 0;

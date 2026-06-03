@@ -32,7 +32,7 @@ from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf
 
 
 SERVICE_TYPE = "_tori-ocr._tcp.local."
-DEFAULT_PORT = 8020
+DEFAULT_PORT = 8674
 
 
 @dataclass

@@ -17,7 +17,7 @@ function loadConfig() {
   return {
     serviceName: process.env.TORI_SERVICE_NAME || process.env.TORI_MDNS_NAME || "tori-ocr",
     serviceVersion: process.env.TORI_SERVICE_VERSION || packageJson.version,
-    port: readNumber(process.env.PORT, 8020),
+    port: readNumber(process.env.PORT, 8674),
     mdnsName: process.env.TORI_MDNS_NAME || "tori-ocr",
     match: {
       maxCandidates: readNumber(process.env.MATCH_MAX_CANDIDATES, 5),

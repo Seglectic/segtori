@@ -45,7 +45,7 @@ The server should advertise an HTTP service over mDNS:
 
 - Service type: `_tori-ocr._tcp.local`
 - Default instance name: `tori-ocr`
-- Default port: `8020`
+- Default port: `8674`
 
 The firmware should try mDNS discovery first. If discovery fails, it should use a configured fallback host and port.
 

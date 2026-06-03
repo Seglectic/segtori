@@ -43,7 +43,7 @@ The `service/` project should be initialized as a Node.js service. It should inc
 
 The server should read configuration from environment variables:
 
-- `PORT`: HTTP server port, default `8020`.
+- `PORT`: HTTP server port, default `8674`.
 - `AIRTABLE_API_TOKEN`: Airtable API token.
 - `AIRTABLE_BASE_ID`: Airtable base ID.
 - `AIRTABLE_TABLE_NAME`: Airtable table name.
@@ -53,4 +53,3 @@ The server should read configuration from environment variables:
 - `TORI_MDNS_NAME`: advertised device/service name, default `tori-ocr`.
 
 The firmware should eventually support Wi-Fi and server settings through a development-time config file that is not committed with secrets.
-

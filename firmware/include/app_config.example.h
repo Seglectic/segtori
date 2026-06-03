@@ -26,7 +26,7 @@ constexpr AppConfig kAppConfig{
     "tori-device",
     "tori-ocr",
     "tori-ocr.local",
-    8020,
+    8674,
     15000,
     15000,
 };

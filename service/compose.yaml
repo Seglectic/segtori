@@ -2,6 +2,6 @@ services:
   tori-service:
     build: .
     ports:
-      - "8020:8020"
+      - "8674:8674"
     env_file:
       - .env
