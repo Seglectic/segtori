@@ -1,20 +1,20 @@
 # Firmware
 
-The current firmware is an early ESP32-CAM testing scaffold that exposes a small web console, captures images with the onboard camera, and relays scans to the TORI service.
+The current firmware is an early ESP32-CAM testing scaffold that exposes a small web console, captures images with the onboard camera, and relays scans to the Segtori service.
 
 This is not yet the final handheld UX described in the broader project docs. Right now, the firmware is best understood as:
 
 - a Wi-Fi + mDNS client
 - a camera capture endpoint
 - a local status web server
-- a thin relay to the TORI OCR service
+- a thin relay to the Segtori OCR service
 
 ## What It Currently Owns
 
 - camera initialization for the ESP32-CAM OV2640
 - Wi-Fi connection and retry behavior
-- mDNS startup and TORI service discovery
-- periodic health checks against the TORI service
+- mDNS startup and Segtori service discovery
+- periodic health checks against the Segtori service
 - a local HTTP console on port `80`
 - image capture and multipart upload to `POST /api/scan`
 - local status tracking for debugging the current flow
@@ -59,7 +59,7 @@ flowchart TD
         C[Initialize camera]
         D[Connect to Wi-Fi]
         E[Start mDNS responder]
-        F[Discover TORI service]
+        F[Discover Segtori service]
         G[Health check /api/health]
         H[If camera, Wi-Fi, and service are ready<br/>set state to Ready]
         I[Start local web server on port 80]
@@ -71,12 +71,12 @@ flowchart TD
         O[Set state to Capture]
         P[Capture JPEG frame from camera]
         Q[Set state to Upload]
-        R[Send multipart POST /api/scan to TORI service]
+        R[Send multipart POST /api/scan to Segtori service]
         S[Parse scanId, ocrText, match.id, match.name,<br/>match.quantity, match.score]
         T[Set state to Match or Error]
     end
 
-    subgraph SRV[TORI Service]
+    subgraph SRV[Segtori Service]
         U[Receive image at /api/scan]
         V[Run OCR]
         W[Rank inventory matches]
@@ -108,11 +108,11 @@ There are two HTTP layers in the current firmware:
    - `GET /api/status` returns current firmware state, last OCR text, last match, and service target.
    - `POST /api/scan` triggers a camera capture on the ESP32 itself.
 
-2. The firmware then acts as an HTTP client to the TORI service.
+2. The firmware then acts as an HTTP client to the Segtori service.
    - It uploads the captured JPEG to the server’s `POST /api/scan`.
    - It periodically checks `GET /api/health`.
 
-That means the browser never talks directly to the TORI service in the current debug setup. The browser talks to the ESP32, and the ESP32 relays the scan to the service.
+That means the browser never talks directly to the Segtori service in the current debug setup. The browser talks to the ESP32, and the ESP32 relays the scan to the service.
 
 ## Current Retry And Recovery Behavior
 
@@ -133,7 +133,7 @@ If service discovery fails:
 - the firmware falls back to `fallbackHost` and `fallbackPort` from `app_config.h`
 - later discovery attempts continue in the background
 
-If the TORI service is not healthy:
+If the Segtori service is not healthy:
 
 - scans are rejected with `service unavailable`
 - the state moves to `Error` or back to `Discovery`/waiting behavior depending on timing

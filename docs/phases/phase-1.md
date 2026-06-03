@@ -5,7 +5,7 @@ Phase 1 builds the smallest useful end-to-end system.
 ## Goals
 
 - Device can capture an image on button press.
-- Device can discover or connect to the TORI server.
+- Device can discover or connect to the Segtori server.
 - Server can OCR the image with the system `tesseract` binary.
 - Server can fetch Airtable inventory records.
 - Server can fuzzy-match OCR text to the closest inventory item name.
@@ -84,4 +84,3 @@ The Phase 1 container setup should also become reproducible:
 - Quantity edits from the device update Airtable.
 - The server can be found without hard-coding an IP address when mDNS is available.
 - A configured server host fallback exists for networks where mDNS is unavailable.
-

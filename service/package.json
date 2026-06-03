@@ -1,8 +1,8 @@
 {
-  "name": "tori-service",
+  "name": "segtori-service",
   "version": "0.1.0",
   "private": true,
-  "description": "TORI OCR and inventory service scaffolding",
+  "description": "Segtori OCR and inventory service scaffolding",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

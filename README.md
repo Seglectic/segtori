@@ -1,13 +1,13 @@
-# TORI
+# Segtori
 
-TORI, the Tagged Object Recognition Interface, is a handheld inventory tool built around an ESP32-CAM and a small OCR service on the local network.
+Segtori, the Seglectic Tagged Object Recognition Interface, is a handheld inventory tool built around an ESP32-CAM and a small OCR service on the local network.
 
 The device captures a label or bin tag, sends the image to the server, receives the closest inventory match, and lets the operator update quantity from the handheld controls.
 
 ## What It Does
 
 - captures still images on an ESP32-CAM
-- discovers the local TORI service over mDNS
+- discovers the local Segtori service over mDNS
 - runs OCR with Tesseract on the server
 - matches recognized text against inventory records
 - returns the best match plus ranked candidates
@@ -18,12 +18,12 @@ The device captures a label or bin tag, sends the image to the server, receives 
 ```mermaid
 flowchart TD
     subgraph FW[ESP32 Firmware]
-        A[Discover TORI service over mDNS]
+        A[Discover Segtori service over mDNS]
         B[Capture image]
         F[Review match and edit quantity]
     end
 
-    subgraph SRV[TORI Service]
+    subgraph SRV[Segtori Service]
         C[Receive image at /api/scan]
         D[Run OCR and rank candidates]
         E[Return best match and candidates]
@@ -57,7 +57,7 @@ flowchart TD
 - Firmware: PlatformIO + Arduino on `esp32cam`
 - Service: Node.js 20 + Express
 - OCR: host-installed `tesseract`
-- Discovery: `_tori-ocr._tcp.local`
+- Discovery: `_segtori-ocr._tcp.local`
 - Inventory backend: Airtable
 
 ## Current Service API

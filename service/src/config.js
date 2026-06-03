@@ -14,11 +14,25 @@ function readNumber(value, fallback) {
 }
 
 function loadConfig() {
+  const serviceName =
+    process.env.SEGTORI_SERVICE_NAME ||
+    process.env.SEGTORI_MDNS_NAME ||
+    process.env.TORI_SERVICE_NAME ||
+    process.env.TORI_MDNS_NAME ||
+    "segtori-ocr";
+  const mdnsName =
+    process.env.SEGTORI_MDNS_NAME ||
+    process.env.TORI_MDNS_NAME ||
+    "segtori-ocr";
+
   return {
-    serviceName: process.env.TORI_SERVICE_NAME || process.env.TORI_MDNS_NAME || "tori-ocr",
-    serviceVersion: process.env.TORI_SERVICE_VERSION || packageJson.version,
+    serviceName,
+    serviceVersion:
+      process.env.SEGTORI_SERVICE_VERSION ||
+      process.env.TORI_SERVICE_VERSION ||
+      packageJson.version,
     port: readNumber(process.env.PORT, 8674),
-    mdnsName: process.env.TORI_MDNS_NAME || "tori-ocr",
+    mdnsName,
     match: {
       maxCandidates: readNumber(process.env.MATCH_MAX_CANDIDATES, 5),
     },

@@ -1,6 +1,6 @@
-# TORI Design Direction
+# Segtori Design Direction
 
-TORI should look and feel like a sleek handheld technical instrument. It should be minimal, durable, and direct, with a strong emphasis on speed and readability.
+Segtori should look and feel like a sleek handheld technical instrument. It should be minimal, durable, and direct, with a strong emphasis on speed and readability.
 
 ## Industrial Design Language
 

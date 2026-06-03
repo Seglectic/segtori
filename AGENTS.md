@@ -4,7 +4,7 @@ This file gives coding agents the minimum context needed to work safely in this 
 
 ## Project Summary
 
-TORI, the Tagged Object Recognition Interface, is a handheld inventory device. The ESP32-CAM firmware captures images and sends them to a local OCR service, which reads text, matches it against inventory data, and returns an item record so quantity can be updated from the device.
+Segtori, the Seglectic Tagged Object Recognition Interface, is a handheld inventory device. The ESP32-CAM firmware captures images and sends them to a local OCR service, which reads text, matches it against inventory data, and returns an item record so quantity can be updated from the device.
 
 Primary responsibilities:
 

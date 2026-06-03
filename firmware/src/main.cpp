@@ -2,7 +2,8 @@
 // │  Web Scan Console            │
 // │  Serves a compact control    │
 // │  page and relays captured    │
-// │  scans to the TORI service.  │
+// │  scans to the Segtori        │
+// │  service.                    │
 // ╰──────────────────────────────╯
 
 #include <Arduino.h>
@@ -64,7 +65,7 @@ const char kPageHtml[] PROGMEM = R"HTML(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TORI Console</title>
+  <title>Segtori Console</title>
   <style>
     :root{--bg:#0c1113;--panel:#12191d;--line:#273238;--text:#edf4ef;--muted:#96a6a0;--accent:#d4ff67;--warn:#ffb36b;--bad:#ff8d8d}
     *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at top,rgba(212,255,103,.12),transparent 24%),linear-gradient(180deg,#0b0f12,#10171a 60%,#0b1012);color:var(--text);font-family:"IBM Plex Mono","Menlo",monospace}
@@ -91,7 +92,7 @@ const char kPageHtml[] PROGMEM = R"HTML(
   <main>
     <div class="top">
       <div>
-        <div class="eyebrow">Tagged Object Recognition Interface</div>
+        <div class="eyebrow">Seglectic Tagged Object Recognition Interface</div>
         <h1>Scan Console</h1>
       </div>
       <div class="foot" id="ip">offline</div>
@@ -407,7 +408,7 @@ void discoverService() {
   }
 
   gLastDiscoveryMs = millis();
-  setStatus(ScreenState::kDiscoveringService, "Resolving TORI service");
+  setStatus(ScreenState::kDiscoveringService, "Resolving Segtori service");
   gServiceFromDiscovery = false;
   gState.serverHost = kAppConfig.fallbackHost;
   gState.serverPort = kAppConfig.fallbackPort;
@@ -584,7 +585,7 @@ void handleScan() {
   }
 
   if (!gServiceReachable) {
-    gLastError = "TORI service unavailable";
+    gLastError = "Segtori service unavailable";
     setStatus(ScreenState::kError, gLastError);
     gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"service unavailable\"}");
     return;
@@ -595,7 +596,7 @@ void handleScan() {
   setStatus(ScreenState::kCapturing, "Capturing image");
   checkServiceHealth();
   if (!gServiceReachable) {
-    gLastError = "TORI service unavailable";
+    gLastError = "Segtori service unavailable";
     setStatus(ScreenState::kError, gLastError);
     gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"service unavailable\"}");
     return;

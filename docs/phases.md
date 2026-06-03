@@ -1,4 +1,4 @@
-# TORI Phases
+# Segtori Phases
 
 The roadmap is split into one file per phase so implementation guidance stays focused instead of accreting into a single long document.
 
@@ -21,4 +21,3 @@ The roadmap is split into one file per phase so implementation guidance stays fo
 - Phase 4 adds a local inventory backend behind the same firmware-facing API.
 - Phase 5 improves on-device setup, state handling, and day-to-day UX.
 - Phase 6 validates the physical device for repeated field use.
-

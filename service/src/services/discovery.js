@@ -1,6 +1,6 @@
 // ╭──────────────────────────────╮
 // │  mDNS Advertisement          │
-// │  Publishes the TORI HTTP     │
+// │  Publishes the Segtori HTTP  │
 // │  service when a Bonjour      │
 // │  implementation is present.  │
 // ╰──────────────────────────────╯
@@ -24,7 +24,7 @@ function startMdnsAdvertisement(config, logger = console) {
   const bonjour = new BonjourService();
   const publication = bonjour.publish({
     name: config.mdnsName,
-    type: "tori-ocr",
+    type: "segtori-ocr",
     protocol: "tcp",
     port: config.port,
   });

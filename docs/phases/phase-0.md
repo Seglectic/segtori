@@ -50,6 +50,6 @@ The server should read configuration from environment variables:
 - `AIRTABLE_ITEM_ID_FIELD`: field used as the stable item identifier.
 - `AIRTABLE_ITEM_NAME_FIELD`: field used for matching OCR text.
 - `AIRTABLE_QUANTITY_FIELD`: field updated by the device.
-- `TORI_MDNS_NAME`: advertised device/service name, default `tori-ocr`.
+- `SEGTORI_MDNS_NAME`: advertised device/service name, default `segtori-ocr`.
 
 The firmware should eventually support Wi-Fi and server settings through a development-time config file that is not committed with secrets.
