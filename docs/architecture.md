@@ -8,7 +8,7 @@ The firmware is responsible for the physical user workflow:
 
 - Connect to Wi-Fi.
 - Discover the Segtori OCR service with mDNS.
-- Capture still images with the ESP32-CAM OV2640 camera.
+- Capture still images with supported OV2640 and OV3660 cameras.
 - Upload images to the server.
 - Render scan status, match results, quantity editing, and error states.
 - Read the scan button and D-pad.
@@ -34,6 +34,8 @@ The service is responsible for OCR, inventory lookup, and inventory mutation:
 - Match OCR text to the closest inventory item.
 - Return the best match to the device.
 - Update item quantity by inventory ID.
+- Persist scan images, results, and failure diagnostics for local inspection.
+- Serve a local development dashboard for browsing persisted scan jobs.
 
 For Phase 1, the service can call the host `tesseract` binary directly. Later containerized versions should install Tesseract inside the Docker image.
 
@@ -142,6 +144,26 @@ Planned local inventory endpoints:
 Planned diagnostic endpoint:
 
 - `GET /api/scans/:id`: returns scan diagnostics when debug mode is enabled.
+
+Current Phase 1 development endpoints:
+
+- `GET /`: serves a manually refreshed gallery of persisted scan jobs.
+- `GET /api/jobs`: lists persisted scan jobs.
+- `GET /api/jobs/:id`: returns one persisted scan job.
+- `GET /jobs/:id/image`: returns the original image for a persisted scan job.
+
+These endpoints expose development diagnostics and are not part of the
+firmware-facing API contract.
+
+## Scan Job Persistence
+
+During the current host-run development phase, each scan request creates a job
+under `service/process/<scan-id>/`. The original image and `job.json` are
+retained even when inventory lookup or matching fails. This allows camera,
+OCR, and integration failures to be investigated independently.
+
+Failed jobs should preserve any OCR text already produced under
+`diagnostics.ocrText`.
 
 ## Future Configuration
 

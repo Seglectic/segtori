@@ -9,6 +9,7 @@ const express = require("express");
 
 const { createHealthRouter } = require("./routes/health");
 const { createItemsRouter } = require("./routes/items");
+const { createJobsRouter } = require("./routes/jobs");
 const { createMatchTextRouter } = require("./routes/match-text");
 const { createScanRouter } = require("./routes/scan");
 const { startMdnsAdvertisement } = require("./services/discovery");
@@ -25,6 +26,7 @@ function createApp(config, logger = console) {
 
   app.use(express.json());
 
+  app.use("/", createJobsRouter(config));
   app.use("/api/health", createHealthRouter(config));
   app.use(
     "/api/match-text",

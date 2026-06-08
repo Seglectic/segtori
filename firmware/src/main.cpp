@@ -1,18 +1,16 @@
 // ╭──────────────────────────────╮
-// │  Web Scan Console            │
-// │  Serves a compact control    │
-// │  page and relays captured    │
-// │  scans to the Segtori        │
-// │  service.                    │
+// │  Segtori Camera Client       │
+// │  Captures fresh still images │
+// │  and sends them to Segtori.  │
 // ╰──────────────────────────────╯
 
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
-#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <esp_camera.h>
+#include <esp_log.h>
 
 #if __has_include("app_config.h")
 #include "app_config.h"
@@ -20,44 +18,38 @@
 #include "app_config.example.h"
 #endif
 #include "app_state.h"
+#include "camera_pins.h"
 
 namespace tori {
 
-constexpr int kCameraPinPwdn = 32;
-constexpr int kCameraPinReset = -1;
-constexpr int kCameraPinXclk = 0;
-constexpr int kCameraPinSiod = 26;
-constexpr int kCameraPinSioc = 27;
-constexpr int kCameraPinY9 = 35;
-constexpr int kCameraPinY8 = 34;
-constexpr int kCameraPinY7 = 39;
-constexpr int kCameraPinY6 = 36;
-constexpr int kCameraPinY5 = 21;
-constexpr int kCameraPinY4 = 19;
-constexpr int kCameraPinY3 = 18;
-constexpr int kCameraPinY2 = 5;
-constexpr int kCameraPinVsync = 25;
-constexpr int kCameraPinHref = 23;
-constexpr int kCameraPinPclk = 22;
 constexpr uint32_t kWifiRetryIntervalMs = 12000;
 constexpr uint32_t kDiscoveryRetryIntervalMs = 15000;
 constexpr uint32_t kHealthCheckIntervalMs = 15000;
 constexpr uint16_t kFastRequestTimeoutMs = 2500;
 constexpr size_t kUploadChunkSize = 1460;
+constexpr uint32_t kButtonDebounceMs = 50;
+constexpr uint8_t kCameraFlashLedcChannel = 7;
+constexpr uint16_t kCameraFlashPwmFrequencyHz = 5000;
+constexpr uint8_t kCameraFlashPwmResolutionBits = 8;
+constexpr uint8_t kCameraFlashFadeSteps = 32;
+constexpr uint8_t kCameraFlashFadeStepDelayMs = 6;
 
 DeviceState gState{};
-WebServer gServer(80);
 bool gCameraReady = false;
 bool gWifiReady = false;
 bool gMdnsReady = false;
 bool gServiceReachable = false;
 bool gServiceFromDiscovery = false;
+framesize_t gCameraFrameSize = FRAMESIZE_UXGA;
 String gLastScanId;
 String gLastError;
 String gIpAddress = "offline";
 unsigned long gLastWifiAttemptMs = 0;
 unsigned long gLastDiscoveryMs = 0;
 unsigned long gLastHealthCheckMs = 0;
+String gSerialCommand;
+bool gSnapButtonPressed = false;
+unsigned long gSnapButtonChangedMs = 0;
 
 const char kPageHtml[] PROGMEM = R"HTML(
 <!doctype html>
@@ -180,9 +172,16 @@ const char kPageHtml[] PROGMEM = R"HTML(
 </html>
 )HTML";
 
+const char* screenStateName(ScreenState screen);
+
 void setStatus(ScreenState screen, const String& status) {
+  const bool changed = gState.screen != screen || gState.lastStatus != status;
   gState.screen = screen;
   gState.lastStatus = status;
+
+  if (changed) {
+    Serial.printf("[state] %s: %s\n", screenStateName(screen), status.c_str());
+  }
 }
 
 const char* screenStateName(ScreenState screen) {
@@ -372,8 +371,9 @@ void applyScanResponse(const String& body) {
 
 bool connectWifi() {
   setStatus(ScreenState::kConnectingWifi, "Joining Wi-Fi");
+  Serial.println("[wifi] connecting");
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
+  WiFi.setSleep(true);
   WiFi.begin(kAppConfig.wifiSsid, kAppConfig.wifiPassword);
 
   const unsigned long startedAt = millis();
@@ -388,6 +388,9 @@ bool connectWifi() {
   if (!gWifiReady) {
     gLastError = "Wi-Fi unavailable";
     setStatus(ScreenState::kError, gLastError);
+    Serial.println("[wifi] connection timed out");
+  } else {
+    Serial.printf("[wifi] connected ip=%s rssi=%d dBm\n", gIpAddress.c_str(), WiFi.RSSI());
   }
 
   return gWifiReady;
@@ -399,10 +402,26 @@ bool beginMdns() {
   }
 
   gMdnsReady = MDNS.begin(kAppConfig.mdnsHostName);
+  Serial.printf("[mdns] responder %s as %s.local\n",
+                gMdnsReady ? "started" : "failed",
+                kAppConfig.mdnsHostName);
   return gMdnsReady;
 }
 
-void discoverService() {
+bool isOnWifiSubnet(const IPAddress& address) {
+  const IPAddress localAddress = WiFi.localIP();
+  const IPAddress subnetMask = WiFi.subnetMask();
+
+  for (uint8_t index = 0; index < 4; ++index) {
+    if ((address[index] & subnetMask[index]) != (localAddress[index] & subnetMask[index])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void discoverService(bool verbose = false) {
   if (millis() - gLastDiscoveryMs < kDiscoveryRetryIntervalMs && !gState.serverHost.isEmpty()) {
     return;
   }
@@ -415,15 +434,39 @@ void discoverService() {
 
   if (gMdnsReady) {
     const int serviceCount = MDNS.queryService(kAppConfig.mdnsServiceName, "tcp");
-    if (serviceCount > 0) {
-      gState.serverHost = MDNS.IP(0).toString();
-      gState.serverPort = MDNS.port(0);
-      gServiceFromDiscovery = true;
+    if (verbose) {
+      Serial.printf("[discovery] found %d candidate(s)\n", serviceCount);
     }
+
+    for (int index = 0; index < serviceCount; ++index) {
+      const IPAddress candidate = MDNS.IP(index);
+      const bool onWifiSubnet = isOnWifiSubnet(candidate);
+      if (verbose) {
+        Serial.printf("[discovery] candidate=%s:%u wifi-subnet=%s\n",
+                      candidate.toString().c_str(),
+                      MDNS.port(index),
+                      onWifiSubnet ? "yes" : "no");
+      }
+
+      if (onWifiSubnet) {
+        gState.serverHost = candidate.toString();
+        gState.serverPort = MDNS.port(index);
+        gServiceFromDiscovery = true;
+        break;
+      }
+    }
+  }
+
+  if (verbose) {
+    Serial.printf("[discovery] target=%s:%u source=%s\n",
+                  gState.serverHost.c_str(),
+                  gState.serverPort,
+                  gServiceFromDiscovery ? "mdns" : "fallback");
   }
 }
 
 bool initializeCamera() {
+  Serial.println("[camera] initializing");
   camera_config_t config{};
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -445,10 +488,10 @@ bool initializeCamera() {
   config.pin_reset = kCameraPinReset;
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
-  config.frame_size = FRAMESIZE_HQVGA;
-  config.jpeg_quality = 18;
+  config.frame_size = FRAMESIZE_UXGA;
+  config.jpeg_quality = 10;
   config.fb_count = 1;
-  config.grab_mode = CAMERA_GRAB_LATEST;
+  config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
 
   const esp_err_t result = esp_camera_init(&config);
@@ -457,12 +500,88 @@ bool initializeCamera() {
   if (!gCameraReady) {
     gLastError = "Camera initialization failed";
     setStatus(ScreenState::kError, gLastError);
+    Serial.printf("[camera] initialization failed error=0x%x\n", result);
+  } else {
+    sensor_t* sensor = esp_camera_sensor_get();
+    framesize_t maximumFrameSize = FRAMESIZE_UXGA;
+    const char* sensorName = "unknown";
+
+    if (sensor) {
+      if (sensor->id.PID == OV2640_PID) {
+        sensorName = "OV2640";
+        maximumFrameSize = FRAMESIZE_UXGA;
+      } else if (sensor->id.PID == OV3660_PID) {
+        sensorName = "OV3660";
+        maximumFrameSize = FRAMESIZE_QXGA;
+      }
+
+      sensor->set_framesize(sensor, maximumFrameSize);
+      sensor->set_quality(sensor, 10);
+      sensor->set_vflip(sensor, 1);
+      sensor->set_hmirror(sensor, 0);
+    }
+
+    gCameraFrameSize = maximumFrameSize;
+    Serial.printf("[camera] ready sensor=%s pid=0x%x frame-size=%d quality=10\n",
+                  sensorName,
+                  sensor ? sensor->id.PID : 0,
+                  maximumFrameSize);
   }
 
   return gCameraReady;
 }
 
-bool checkServiceHealth() {
+void shutdownCamera() {
+  if (!gCameraReady) {
+    setCpuFrequencyMhz(80);
+    return;
+  }
+
+  esp_camera_deinit();
+  gCameraReady = false;
+  setCpuFrequencyMhz(80);
+  Serial.println("[camera] sleeping");
+}
+
+camera_fb_t* captureFreshFrame() {
+  setCpuFrequencyMhz(240);
+  if (!gCameraReady && !initializeCamera()) {
+    setCpuFrequencyMhz(80);
+    return nullptr;
+  }
+
+  sensor_t* sensor = esp_camera_sensor_get();
+  if (sensor) {
+    sensor->set_framesize(sensor, FRAMESIZE_QVGA);
+  }
+
+  // Warm auto-exposure quickly at low resolution before the final full-size frame.
+  delay(250);
+  for (uint8_t index = 0; index < 5; ++index) {
+    camera_fb_t* staleFrame = esp_camera_fb_get();
+    if (!staleFrame) {
+      return nullptr;
+    }
+    esp_camera_fb_return(staleFrame);
+    delay(40);
+  }
+
+  if (sensor) {
+    sensor->set_framesize(sensor, gCameraFrameSize);
+  }
+
+  camera_fb_t* staleFrame = esp_camera_fb_get();
+  if (!staleFrame) {
+    return nullptr;
+  }
+  esp_camera_fb_return(staleFrame);
+
+  return esp_camera_fb_get();
+}
+
+bool checkServiceHealth(bool verbose = false) {
+  const bool wasReachable = gServiceReachable;
+
   if (!gWifiReady || gState.serverHost.isEmpty()) {
     gServiceReachable = false;
     return false;
@@ -482,6 +601,11 @@ bool checkServiceHealth() {
   const int statusCode = http.GET();
   gServiceReachable = statusCode == 200;
   http.end();
+  if (verbose || wasReachable != gServiceReachable) {
+    Serial.printf("[service] health status=%d reachable=%s\n",
+                  statusCode,
+                  gServiceReachable ? "yes" : "no");
+  }
   return gServiceReachable;
 }
 
@@ -528,18 +652,25 @@ bool uploadFrame(camera_fb_t* frame, String& body, int& statusCode) {
 
   client.print(footer);
 
+  String response;
   const unsigned long startedAt = millis();
-  while (client.connected() && !client.available() &&
-         millis() - startedAt < kAppConfig.requestTimeoutMs) {
+  while (millis() - startedAt < kAppConfig.requestTimeoutMs) {
+    while (client.available()) {
+      response += static_cast<char>(client.read());
+    }
+
+    if (!client.connected()) {
+      break;
+    }
+
     delay(10);
   }
 
-  String response;
-  while (client.available()) {
-    response += client.readString();
-  }
-
+  const bool timedOut = client.connected();
   client.stop();
+  if (timedOut) {
+    Serial.println("[snap] response timed out");
+  }
   statusCode = response.startsWith("HTTP/1.1 ") ? response.substring(9, 12).toInt() : 500;
   body = extractHttpBody(response);
   return statusCode == 200;
@@ -565,30 +696,48 @@ String buildStatusJson() {
   return json;
 }
 
-void handleRoot() {
-  gServer.send_P(200, "text/html", kPageHtml);
+struct ScanResult {
+  bool ok = false;
+  int statusCode = 500;
+  String body;
+};
+
+void turnCameraFlashOn() {
+  if (kCameraFlashPin >= 0) {
+    ledcWrite(kCameraFlashLedcChannel, 255);
+  }
 }
 
-void handleStatus() {
-  gServer.send(200, "application/json", buildStatusJson());
-}
-
-void handleScan() {
-  if (!gCameraReady) {
-    gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"camera unavailable\"}");
+void fadeCameraFlashOut() {
+  if (kCameraFlashPin < 0) {
     return;
   }
 
+  for (int duty = 255; duty >= 0; duty -= 255 / kCameraFlashFadeSteps) {
+    ledcWrite(kCameraFlashLedcChannel, duty);
+    delay(kCameraFlashFadeStepDelayMs);
+  }
+  ledcWrite(kCameraFlashLedcChannel, 0);
+}
+
+ScanResult runScan() {
+  ScanResult result;
+  turnCameraFlashOn();
+
   if (!gWifiReady) {
-    gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"wifi unavailable\"}");
-    return;
+    fadeCameraFlashOut();
+    result.statusCode = 503;
+    result.body = "{\"ok\":false,\"error\":\"wifi unavailable\"}";
+    return result;
   }
 
   if (!gServiceReachable) {
+    fadeCameraFlashOut();
     gLastError = "Segtori service unavailable";
     setStatus(ScreenState::kError, gLastError);
-    gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"service unavailable\"}");
-    return;
+    result.statusCode = 503;
+    result.body = "{\"ok\":false,\"error\":\"service unavailable\"}";
+    return result;
   }
 
   clearMatch();
@@ -596,46 +745,53 @@ void handleScan() {
   setStatus(ScreenState::kCapturing, "Capturing image");
   checkServiceHealth();
   if (!gServiceReachable) {
+    fadeCameraFlashOut();
     gLastError = "Segtori service unavailable";
     setStatus(ScreenState::kError, gLastError);
-    gServer.send(503, "application/json", "{\"ok\":false,\"error\":\"service unavailable\"}");
-    return;
+    result.statusCode = 503;
+    result.body = "{\"ok\":false,\"error\":\"service unavailable\"}";
+    return result;
   }
 
-  camera_fb_t* frame = esp_camera_fb_get();
+  camera_fb_t* frame = captureFreshFrame();
   if (!frame) {
+    fadeCameraFlashOut();
+    shutdownCamera();
     gLastError = "Camera capture failed";
     setStatus(ScreenState::kError, gLastError);
-    gServer.send(500, "application/json", "{\"ok\":false,\"error\":\"capture failed\"}");
-    return;
+    result.body = "{\"ok\":false,\"error\":\"capture failed\"}";
+    return result;
   }
 
-  setStatus(ScreenState::kUploading, "Uploading scan");
-  String body;
-  int statusCode = 0;
-  const bool ok = uploadFrame(frame, body, statusCode);
+  Serial.printf("[snap] captured %u bytes\n", frame->len);
+  fadeCameraFlashOut();
+  setStatus(ScreenState::kUploading, "Uploading snap");
+  result.statusCode = 0;
+  result.ok = uploadFrame(frame, result.body, result.statusCode);
   esp_camera_fb_return(frame);
+  shutdownCamera();
 
-  if (!ok) {
-    gLastError = "Scan upload failed";
+  if (!result.ok) {
+    gLastError = result.statusCode > 0 ? "Snap processing failed" : "Snap upload failed";
     setStatus(ScreenState::kError, gLastError);
-    const String fallback =
-        body.length() > 0 ? body : "{\"ok\":false,\"error\":\"upload failed\"}";
-    gServer.send(statusCode > 0 ? statusCode : 500, "application/json", fallback);
-    return;
+    if (result.body.isEmpty()) {
+      result.body = "{\"ok\":false,\"error\":\"upload failed\"}";
+    }
+    if (result.statusCode <= 0) {
+      result.statusCode = 500;
+    }
+    return result;
   }
 
-  applyScanResponse(body);
+  Serial.printf("[snap] upload complete status=%d\n", result.statusCode);
+  applyScanResponse(result.body);
+  Serial.printf("[snap] result id=%s match=%s score=%.3f\n",
+                gLastScanId.c_str(),
+                gState.latestMatch.name.c_str(),
+                gState.latestMatch.score);
   setStatus(ScreenState::kShowingMatch,
             gState.latestMatch.name.isEmpty() ? "Scan complete, no match" : "Match received");
-  gServer.send(200, "application/json", "{\"ok\":true}");
-}
-
-void configureRoutes() {
-  gServer.on("/", HTTP_GET, handleRoot);
-  gServer.on("/api/status", HTTP_GET, handleStatus);
-  gServer.on("/api/scan", HTTP_POST, handleScan);
-  gServer.begin();
+  return result;
 }
 
 void pollNetworkState() {
@@ -650,7 +806,8 @@ void pollNetworkState() {
     }
   }
 
-  if (gWifiReady && now - gLastDiscoveryMs >= kDiscoveryRetryIntervalMs) {
+  if (gWifiReady && !gServiceReachable &&
+      now - gLastDiscoveryMs >= kDiscoveryRetryIntervalMs) {
     discoverService();
   }
 
@@ -665,23 +822,153 @@ void pollNetworkState() {
   }
 }
 
+void printSerialHelp() {
+  Serial.println("Commands:");
+  Serial.println("  help      Show this command list");
+  Serial.println("  status    Show device status");
+  Serial.println("  health    Check Segtori service health");
+  Serial.println("  discover  Rediscover the Segtori service");
+  Serial.println("  snap      Capture and upload an image");
+}
+
+void printSerialPrompt() {
+  Serial.print("segtori> ");
+}
+
+void runSerialCommand(String command) {
+  command.trim();
+  command.toLowerCase();
+
+  if (command.isEmpty()) {
+    return;
+  }
+
+  if (command == "help" || command == "?") {
+    printSerialHelp();
+  } else if (command == "status") {
+    Serial.println(buildStatusJson());
+  } else if (command == "health") {
+    checkServiceHealth(true);
+  } else if (command == "discover") {
+    gLastDiscoveryMs = 0;
+    discoverService(true);
+  } else if (command == "snap") {
+    Serial.println("[command] starting snap");
+    const ScanResult result = runScan();
+    Serial.printf("[command] snap finished status=%d ok=%s\n",
+                  result.statusCode,
+                  result.ok ? "yes" : "no");
+    if (!result.ok && !result.body.isEmpty()) {
+      Serial.println(result.body);
+    }
+  } else {
+    Serial.printf("Unknown command: %s\n", command.c_str());
+    Serial.println("Type 'help' for available commands.");
+  }
+}
+
+void pollSerialCommands() {
+  while (Serial.available()) {
+    const char current = static_cast<char>(Serial.read());
+
+    if (current == '\r') {
+      continue;
+    }
+
+    if (current == '\n') {
+      Serial.println();
+      runSerialCommand(gSerialCommand);
+      gSerialCommand = "";
+      printSerialPrompt();
+    } else if ((current == '\b' || current == 127) && !gSerialCommand.isEmpty()) {
+      gSerialCommand.remove(gSerialCommand.length() - 1);
+      Serial.print("\b \b");
+    } else if (current >= 32 && current <= 126 && gSerialCommand.length() < 64) {
+      gSerialCommand += current;
+      Serial.write(current);
+    }
+  }
+}
+
+void configureSnapButton() {
+  if (kSnapButtonPin < 0) {
+    return;
+  }
+
+  pinMode(kSnapButtonPin, INPUT_PULLUP);
+  gSnapButtonPressed = digitalRead(kSnapButtonPin) == LOW;
+}
+
+void configureCameraFlash() {
+  if (kCameraFlashPin < 0) {
+    return;
+  }
+
+  ledcSetup(kCameraFlashLedcChannel,
+            kCameraFlashPwmFrequencyHz,
+            kCameraFlashPwmResolutionBits);
+  ledcAttachPin(kCameraFlashPin, kCameraFlashLedcChannel);
+  ledcWrite(kCameraFlashLedcChannel, 0);
+}
+
+void pollSnapButton() {
+  if (kSnapButtonPin < 0) {
+    return;
+  }
+
+  const bool pressed = digitalRead(kSnapButtonPin) == LOW;
+  if (pressed == gSnapButtonPressed || millis() - gSnapButtonChangedMs < kButtonDebounceMs) {
+    return;
+  }
+
+  gSnapButtonPressed = pressed;
+  gSnapButtonChangedMs = millis();
+  if (pressed) {
+    Serial.println("[button] snap");
+    const ScanResult result = runScan();
+    Serial.printf("[button] snap finished status=%d ok=%s\n",
+                  result.statusCode,
+                  result.ok ? "yes" : "no");
+    if (!result.ok && !result.body.isEmpty()) {
+      Serial.println(result.body);
+    }
+    printSerialPrompt();
+  }
+}
+
 }  // namespace tori
 
 void setup() {
-  tori::setStatus(tori::ScreenState::kBoot, "Booting web console");
+  tori::configureCameraFlash();
+  Serial.begin(115200);
+  delay(1200);
+  Serial.println();
+  Serial.println("[boot] Segtori firmware starting");
+  esp_log_level_set("gdma", ESP_LOG_NONE);
+  Serial.printf("[boot] chip=%s revision=%u flash=%u psram=%u\n",
+                ESP.getChipModel(),
+                ESP.getChipRevision(),
+                ESP.getFlashChipSize(),
+                ESP.getPsramSize());
+  setCpuFrequencyMhz(240);
+  tori::setStatus(tori::ScreenState::kBoot, "Booting camera client");
+  tori::configureSnapButton();
   tori::initializeCamera();
+  tori::shutdownCamera();
   tori::connectWifi();
   tori::beginMdns();
   tori::discoverService();
   tori::checkServiceHealth();
-  if (tori::gCameraReady && tori::gWifiReady && tori::gServiceReachable) {
+  if (tori::gWifiReady && tori::gServiceReachable) {
     tori::setStatus(tori::ScreenState::kReady, "Ready to scan");
   }
-  tori::configureRoutes();
+  tori::printSerialHelp();
+  tori::printSerialPrompt();
 }
 
 void loop() {
+  tori::pollSerialCommands();
+  tori::pollSnapButton();
   tori::pollNetworkState();
-  tori::gServer.handleClient();
-  delay(5);
+  delay(20);
 }

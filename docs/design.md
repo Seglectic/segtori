@@ -89,3 +89,18 @@ The default Phase 1 match screen should reserve space for:
 - Button hints along the bottom edge.
 
 Text should be clipped, wrapped, or abbreviated deliberately. It should never overlap other UI regions.
+
+## Development Dashboard
+
+The service-hosted scan gallery is a development and diagnostics surface, not
+the final handheld interface. It should still follow the project's calm,
+technical visual direction:
+
+- Use a responsive gallery of rectangular job cards.
+- Present the scan image as a square crop within each card.
+- Keep core job information compact beneath the image.
+- Open full job details in a modal when the image is selected.
+- Refresh only on explicit user action so the page does not shift while a job
+  is being inspected.
+- Make failed jobs and retained OCR diagnostics easy to distinguish without
+  using visually aggressive styling.

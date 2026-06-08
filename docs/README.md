@@ -15,7 +15,7 @@ Segtori should feel like a compact modern field tool: crisp, fast, utilitarian, 
 The first useful version prioritizes a narrow loop:
 
 1. Press a hardware button.
-2. Capture an image with the OV2640 camera.
+2. Capture an image with a supported OV2640 or OV3660 camera.
 3. Upload the image to the Segtori server.
 4. Run OCR with Tesseract.
 5. Match recognized text against inventory items.
@@ -26,6 +26,7 @@ The first useful version prioritizes a narrow loop:
 ## Project Phases
 
 The active roadmap lives in [phases.md](./phases.md), which now indexes one file per phase under [`docs/phases/`](./phases/phase-0.md).
+Current checked progress and the immediate work queue live in [status.md](./status.md).
 
 - Phase 0 defines scaffolding, repository shape, and conventions.
 - Phase 1 builds a small MVP using Node.js, system-installed Tesseract, Airtable, and ESP32 firmware.
@@ -36,10 +37,12 @@ The active roadmap lives in [phases.md](./phases.md), which now indexes one file
 
 - [architecture.md](./architecture.md): firmware/server split, API shape, discovery, and inventory backend flow.
 - [design.md](./design.md): device and screen design principles.
+- [hardware/nulllab-esp32s3-cam.md](./hardware/nulllab-esp32s3-cam.md): primary development board, relevant pins, flashlight circuit, and power notes.
 
 ## Initial Defaults
 
-- Firmware target: ESP32-CAM module using an OV2640 sensor.
+- Primary firmware target: nulllab ESP32-S3-CAM using an OV3660 sensor.
+- Legacy firmware target: AI Thinker ESP32-CAM using an OV2640 sensor.
 - Firmware framework: PlatformIO with Arduino for ESP32.
 - Server runtime: Node.js with Express.
 - OCR engine: host-installed `tesseract` binary for Phase 1.

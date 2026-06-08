@@ -21,15 +21,21 @@ function startMdnsAdvertisement(config, logger = console) {
     };
   }
 
-  const bonjour = new BonjourService();
+  const bonjour = new BonjourService(
+    config.mdnsInterface ? { interface: config.mdnsInterface } : {},
+  );
   const publication = bonjour.publish({
     name: config.mdnsName,
     type: "segtori-ocr",
     protocol: "tcp",
     port: config.port,
+    disableIPv6: true,
   });
 
-  logger.info(`[mdns] advertising ${config.mdnsName} on port ${config.port}`);
+  const interfaceLabel = config.mdnsInterface || "all interfaces";
+  logger.info(
+    `[mdns] advertising ${config.mdnsName} on port ${config.port} via ${interfaceLabel}`,
+  );
 
   return {
     stop() {

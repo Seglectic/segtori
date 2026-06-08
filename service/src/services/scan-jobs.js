@@ -98,7 +98,7 @@ function createScanJobStore(config) {
       });
     },
 
-    async failJob(job, error) {
+    async failJob(job, error, diagnostics = {}) {
       const updatedAt = new Date().toISOString();
       const existing = await readJobFile(job.jobDir);
 
@@ -107,6 +107,7 @@ function createScanJobStore(config) {
         id: job.id,
         status: "failed",
         updatedAt,
+        diagnostics,
         error: {
           message: error.message || "scan job failed",
         },

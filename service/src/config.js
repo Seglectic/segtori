@@ -33,6 +33,7 @@ function loadConfig() {
       packageJson.version,
     port: readNumber(process.env.PORT, 8674),
     mdnsName,
+    mdnsInterface: process.env.SEGTORI_MDNS_INTERFACE || "",
     match: {
       maxCandidates: readNumber(process.env.MATCH_MAX_CANDIDATES, 5),
     },

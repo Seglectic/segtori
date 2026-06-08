@@ -54,7 +54,7 @@ flowchart TD
 
 ## Current Stack
 
-- Firmware: PlatformIO + Arduino on `esp32cam`
+- Firmware: PlatformIO + Arduino on the nulllab ESP32-S3-CAM, with a legacy `esp32cam` target
 - Service: Node.js 20 + Express
 - OCR: host-installed `tesseract`
 - Discovery: `_segtori-ocr._tcp.local`
@@ -62,10 +62,15 @@ flowchart TD
 
 ## Current Service API
 
+- `GET /` shows the local scan jobs dashboard
+- `GET /api/jobs` lists captured scan jobs
+- `GET /api/jobs/:id` returns a captured scan job
 - `GET /api/health` returns service metadata and port information
 - `POST /api/scan` accepts an uploaded image under `image`
 - `POST /api/match-text` accepts manual text for match testing
 - `POST /api/items/:id/quantity` updates item quantity
+
+Each scan is stored under `service/process/<scan-id>/`. Completed jobs include OCR and match results, while failed jobs retain intermediate OCR text under `diagnostics.ocrText`.
 
 ## Local Development
 

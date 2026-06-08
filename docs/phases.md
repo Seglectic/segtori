@@ -2,6 +2,8 @@
 
 The roadmap is split into one file per phase so implementation guidance stays focused instead of accreting into a single long document.
 
+Current implementation progress is tracked in [status.md](./status.md).
+
 ## Phase Index
 
 - [Phase 0: Project Scaffolding](./phases/phase-0.md)

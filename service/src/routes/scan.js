@@ -19,6 +19,7 @@ function createScanRouter({
 
   router.post("/", uploadImage, async (request, response, next) => {
     let scanJob = null;
+    let ocrText = "";
 
     try {
       if (!request.file) {
@@ -30,7 +31,7 @@ function createScanRouter({
       }
 
       scanJob = await scanJobStore.createJob(request.file);
-      const ocrText = await extractTextFromImage(request.file);
+      ocrText = await extractTextFromImage(request.file);
       const items = await listInventoryItems();
       const candidates = rankInventoryMatches(ocrText, items, matchLimit);
       const match = candidates[0] || null;
@@ -49,7 +50,7 @@ function createScanRouter({
       });
     } catch (error) {
       if (scanJob) {
-        await scanJobStore.failJob(scanJob, error).catch(() => {});
+        await scanJobStore.failJob(scanJob, error, { ocrText }).catch(() => {});
       }
       next(error);
     }

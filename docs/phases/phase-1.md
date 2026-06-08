@@ -84,3 +84,20 @@ The Phase 1 container setup should also become reproducible:
 - Quantity edits from the device update Airtable.
 - The server can be found without hard-coding an IP address when mDNS is available.
 - A configured server host fallback exists for networks where mDNS is unavailable.
+
+## Current Implementation Status
+
+The current Phase 1 development setup has validated the capture-to-service
+portion of the flow on the nulllab ESP32-S3-CAM:
+
+- The onboard Boot button and serial `snap` command trigger real captures.
+- The firmware discovers the service with mDNS and supports a configured host
+  fallback.
+- Maximum-resolution OV3660 images upload to `POST /api/scan`.
+- The camera is initialized per snap, stale frames are discarded, and the
+  camera is shut down while idle.
+- The service runs Tesseract and persists each image plus job diagnostics.
+- A service-hosted local gallery allows manual inspection of uploaded jobs.
+
+Phase 1 is not complete until valid Airtable credentials demonstrate matching
+and quantity updates, and the final display/D-pad workflow is implemented.
