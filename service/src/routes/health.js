@@ -7,7 +7,7 @@
 
 const express = require("express");
 
-function createHealthRouter(config) {
+function createHealthRouter(config, runtime = {}) {
   const router = express.Router();
 
   router.get("/", (_request, response) => {
@@ -18,6 +18,10 @@ function createHealthRouter(config) {
       mdnsName: config.mdnsName,
       port: config.port,
       ocrBackend: config.ocr.backend,
+      ocrProvider:
+        config.ocr.backend === "onnx"
+          ? runtime.ocrProvider || "starting"
+          : null,
       ocrModel:
         config.ocr.backend === "ollama"
           ? config.ocr.ollamaModel

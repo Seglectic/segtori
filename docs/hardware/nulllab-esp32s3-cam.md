@@ -42,6 +42,90 @@ This document records the board details that directly affect Segtori.
 | TF card CLK | 39 | Card interface |
 | TF card DAT0 / MISO | 40 | Card interface |
 
+## SPI Display Direction
+
+The ESP32-S3R8 has sufficient compute and 8 MB PSRAM for the complete handheld
+workflow with a modest SPI preview display. A 320x240 RGB565 frame is about
+150 KB, and a 40 MHz write-only SPI bus transfers one raw frame in roughly
+31 ms before JPEG decode and controller overhead. Segtori should target an
+8-10 FPS framing preview rather than video-rate output.
+
+The display backend should decode each QVGA JPEG preview into small RGB565
+blocks and push them directly over SPI. It should not retain a permanent full
+display framebuffer. Preview rendering pauses during final capture and upload
+so camera DMA, SPI DMA, and Wi-Fi do not compete during the latency-critical
+scan path.
+
+When TF-card storage is not required, its documented pads are the first
+candidate for a dedicated write-only display bus:
+
+- GPIO39: SPI clock
+- GPIO38: SPI MOSI
+- GPIO40: available panel control signal
+
+A dedicated display may tie chip select active and use a hardware reset
+circuit, reducing required control pins. Final `DC`, chip-select, reset,
+backlight, voltage, and exposed-pad wiring must be validated against the chosen
+panel and board schematic before enabling a real backend. Using these pads
+means the TF card cannot be used concurrently.
+
+### GC9A01 Round Display Wiring
+
+The Teyleten Robot 1.28-inch round display is a 240x240 GC9A01 module with a
+write-only four-wire SPI interface. Its exposed pins are `VCC`, `GND`, `SCL`,
+`SDA`, `DC`, `CS`, and `RST`.
+
+Use this wiring when the TF-card interface is not needed:
+
+| nulllab ESP32-S3-CAM | GC9A01 Display | Purpose |
+| --- | --- | --- |
+| `3V3` | `VCC` | Display power and 3.3 V logic |
+| `GND` | `GND` | Common ground |
+| `GPIO39` / TF `CLK` | `SCL` | SPI clock |
+| `GPIO38` / TF `CMD` | `SDA` | SPI MOSI; display data input |
+| `GPIO40` / TF `DAT0` | `DC` | Display data/command selection |
+| `GND` | `CS` | Permanently selects this dedicated SPI device |
+| Board `RST` / `EN` | `RST` | Resets display whenever the ESP32 resets |
+
+```mermaid
+flowchart LR
+    subgraph ESP["nulllab ESP32-S3-CAM"]
+        E3V3["3V3"]
+        EGND["GND"]
+        E38["GPIO38<br/>TF CMD"]
+        E39["GPIO39<br/>TF CLK"]
+        E40["GPIO40<br/>TF DAT0"]
+        ERST["RST / EN"]
+    end
+
+    subgraph TFT["1.28-inch GC9A01<br/>240x240 Round TFT"]
+        TVCC["VCC"]
+        TGND["GND"]
+        TSDA["SDA / MOSI"]
+        TSCL["SCL / SPI Clock"]
+        TDC["DC"]
+        TCS["CS"]
+        TRST["RST"]
+    end
+
+    E3V3 -->|"3.3 V"| TVCC
+    EGND -->|"Ground"| TGND
+    E38 -->|"Display pixel/command data"| TSDA
+    E39 -->|"SPI clock"| TSCL
+    E40 -->|"Data or command select"| TDC
+    EGND -->|"Dedicated bus: always selected"| TCS
+    ERST -->|"Shared hardware reset"| TRST
+```
+
+This mapping preserves GPIO0 for the current snap button, GPIO3 for the camera
+flashlight, and native USB on GPIO19/20. It consumes the complete TF-card
+interface, so a microSD card cannot be used at the same time.
+
+Power the module from `3V3`, even though its listing permits 3-5 V input. This
+keeps display power and logic levels aligned with the ESP32-S3. Confirm the
+physical module labels before applying power; low-cost GC9A01 breakouts can
+vary in pin order even when their signal names are the same.
+
 ## Double White Flashlight
 
 The two white LEDs beside the camera are the onboard camera flashlight. The
@@ -74,7 +158,8 @@ disconnected and inspected.
 
 Segtori reduces idle load by shutting down the camera and lowering CPU
 frequency between snaps. During capture, the CPU returns to full speed to
-support reliable maximum-resolution camera DMA.
+support reliable camera DMA. Preview mode keeps the CPU and camera active, so
+display brightness and preview duration will materially affect battery life.
 
 ## Firmware Ownership
 

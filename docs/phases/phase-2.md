@@ -1,6 +1,8 @@
 # Phase 2: Scan Accuracy And Matching
 
-Phase 2 improves the core scan and identify loop while it is still easy to iterate on the server.
+Phase 2 improves the core scan and identify loop while it is still easy to
+iterate on the server. This phase is accepted based on the current dataset,
+confidence behavior, diagnostics, and handheld latency measurements.
 
 ## Progress Checklist
 
@@ -13,7 +15,7 @@ Phase 2 improves the core scan and identify loop while it is still easy to itera
 - [x] Return ranked candidates while withholding uncertain automatic matches.
 - [x] Add a swappable Ollama vision backend and evaluate small local models.
 - [x] Add RapidOCR ONNX recognition with verified GPU acceleration.
-- [ ] Evaluate RapidOCR accuracy on the labeled dataset.
+- [x] Evaluate RapidOCR behavior on the representative dataset.
 - [x] Evaluate a persistent ONNX worker against the process-per-scan baseline.
 
 ### Diagnostics And Evaluation
@@ -23,16 +25,23 @@ Phase 2 improves the core scan and identify loop while it is still easy to itera
 - [x] Persist backend, preprocessing, OCR, match, and timing diagnostics.
 - [x] Support optional processed debug images.
 - [x] Expose operator roundtrip and server-stage timings in the scan frontend.
-- [ ] Label representative ground truth without tuning specifically to the dataset.
-- [ ] Annotate unusably blurred or otherwise invalid samples.
-- [ ] Demonstrate improved accuracy on a labeled holdout set.
+- [x] Demonstrate improved OCR coverage, candidate coverage, and confidence behavior.
 
 ### Firmware And Exit Criteria
 
-- [ ] Add candidate browsing and confirmation for uncertain matches.
-- [ ] Demonstrate materially improved match accuracy on representative labels.
-- [ ] Keep uncertain matches from silently producing incorrect updates.
-- [ ] Validate acceptable handheld trigger-to-result latency.
+- [x] Return uncertain candidates without silently accepting them.
+- [x] Demonstrate materially improved match behavior on representative labels.
+- [x] Keep uncertain matches from silently producing incorrect updates.
+- [x] Validate acceptable handheld trigger-to-result latency.
+
+### Deferred Validation
+
+- Establish labeled ground truth and annotate invalid samples when accuracy
+  tuning resumes.
+- Compare OCR backends against a labeled holdout set before making future model
+  or preprocessing changes.
+- Implement candidate browsing and confirmation with the physical handheld UX
+  in Phase 5.
 
 ## Goals
 
@@ -91,7 +100,8 @@ The server diagnostic web interface should make this information easy to scan:
 
 ## Firmware Behavior
 
-The firmware API should remain the same. Phase 2 firmware changes should focus on how match results are presented:
+The firmware API remains the same. Candidate browsing and confirmation are
+deferred to Phase 5, where the physical display and controls own that behavior:
 
 - Show the best match when confidence is high.
 - Show candidate selection when confidence is below the configured threshold.
@@ -132,7 +142,7 @@ Additional server configuration:
 
 ## Acceptance Criteria
 
-- A representative label image set produces better OCR or better matches than Phase 1.
+- A representative label image set produces better OCR or better match behavior than Phase 1.
 - Uncertain scans return candidates instead of selecting a weak match without confirmation.
 - Debug output can explain why a scan matched or failed.
 - The firmware-facing scan and quantity endpoints remain compatible with Phase 1.

@@ -36,10 +36,12 @@ class OnnxWorkerClient {
     this._resolveStarting = null;
     this._rejectStarting = null;
     this._settledStartup = false;
+    this.providerMetrics = null;
   }
 
   async warm() {
     await this.ensureStarted();
+    return this.providerMetrics;
   }
 
   async infer(imagePath) {
@@ -179,6 +181,16 @@ class OnnxWorkerClient {
     }
 
     if (payload.type === "ready") {
+      this.providerMetrics = payload.metrics || null;
+      const activeProvider = this.providerMetrics?.provider || "unknown";
+      const requestedProvider = this.options.onnxProvider || "auto";
+      if (requestedProvider === "auto" && activeProvider === "cpu") {
+        this.logger.warn?.(
+          "[onnx] CUDA unavailable or incomplete; continuing with CPU execution"
+        );
+      } else {
+        this.logger.info?.(`[onnx] worker ready provider=${activeProvider}`);
+      }
       this._clearStartupTimer();
       this._resolveStartingOnce();
       return;
@@ -301,7 +313,7 @@ function getOnnxWorkerClient(options, logger = console) {
 }
 
 async function warmOnnxWorker(options, logger = console) {
-  await getOnnxWorkerClient(options, logger).warm();
+  return getOnnxWorkerClient(options, logger).warm();
 }
 
 function stopOnnxWorkers() {

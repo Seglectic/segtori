@@ -30,13 +30,16 @@ const { uploadImage } = require("./services/uploads");
 function createApp(config, logger = console) {
   const app = express();
   let discovery = null;
+  const runtime = {
+    ocrProvider: config.ocr.backend === "onnx" ? "starting" : null,
+  };
   const liveJobFeed = createLiveJobFeed(logger);
   const scanJobStore = createScanJobStore(config, (job) => liveJobFeed.publish(job));
 
   app.use(express.json());
 
   app.use("/", createJobsRouter(config, scanJobStore));
-  app.use("/api/health", createHealthRouter(config));
+  app.use("/api/health", createHealthRouter(config, runtime));
   app.use(
     "/api/match-text",
     createMatchTextRouter({
@@ -82,7 +85,8 @@ function createApp(config, logger = console) {
     app,
     async warm() {
       if (config.ocr.backend === "onnx") {
-        await warmOnnxOcr(config.ocr);
+        const metrics = await warmOnnxOcr(config.ocr, logger);
+        runtime.ocrProvider = metrics?.provider || "unknown";
       }
     },
     attachServer(server) {

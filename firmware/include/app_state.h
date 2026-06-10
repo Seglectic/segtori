@@ -35,6 +35,10 @@ struct ScanTimings {
   uint32_t roundTripMs = 0;
   uint32_t captureMs = 0;
   uint32_t uploadAndServerMs = 0;
+  uint32_t uploadConnectMs = 0;
+  uint32_t uploadWriteMs = 0;
+  uint32_t responseWaitMs = 0;
+  uint32_t uploadBytes = 0;
   uint32_t serverTotalMs = 0;
   uint32_t serverUploadIngestMs = 0;
   uint32_t serverJobPersistMs = 0;

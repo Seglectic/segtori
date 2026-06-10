@@ -47,7 +47,9 @@ Current checked progress and the immediate work queue live in [status.md](./stat
 - Firmware framework: PlatformIO with Arduino for ESP32.
 - Server runtime: Node.js with Express.
 - Default OCR engine: RapidOCR ONNX with strict CUDA execution and a warmed worker.
-- Fallback OCR engine: host-installed `tesseract` binary.
+- Portable OCR mode: the same RapidOCR ONNX worker using CPU execution.
+- Legacy diagnostic fallback: host-installed `tesseract` binary, outside the
+  supported container deployment path.
 - Discovery: mDNS using `_segtori-ocr._tcp.local`.
 - Inventory source: Airtable for Phase 1.
 - Local inventory backend: planned future support.

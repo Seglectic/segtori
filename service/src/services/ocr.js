@@ -249,8 +249,8 @@ async function extractTextFromImage(file) {
   return variants[0]?.text || "";
 }
 
-async function warmOnnxOcr(options) {
-  await warmOnnxWorker(options);
+async function warmOnnxOcr(options, logger = console) {
+  return warmOnnxWorker(options, logger);
 }
 
 module.exports = {

@@ -309,7 +309,10 @@ function renderDashboard(config) {
       addField("Operator Roundtrip", formatMs(deviceTimings.roundTripMs));
       addField("Capture", formatMs(deviceTimings.captureMs));
       addField("Upload + Server", formatMs(deviceTimings.uploadAndServerMs));
-      addField("Network + Response", formatMs(Math.max(0, (deviceTimings.uploadAndServerMs || 0) - (timings.serverTotalMs || 0))));
+      addField("Outside Server Timer", formatMs(Math.max(0, (deviceTimings.uploadAndServerMs || 0) - (timings.serverTotalMs || 0))));
+      addField("Socket Connect", formatMs(deviceTimings.uploadConnectMs));
+      addField("Image Write", formatMs(deviceTimings.uploadWriteMs));
+      addField("Response Wait", formatMs(deviceTimings.responseWaitMs));
       addField("Server Total", formatMs(timings.serverTotalMs));
       addField("Upload Ingest", formatMs(timings.uploadIngestMs));
       addField("Job Persist", formatMs(timings.jobPersistMs));

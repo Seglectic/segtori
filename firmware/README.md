@@ -36,7 +36,10 @@ The console accepts line-oriented commands:
 - `status` prints the current device state as JSON
 - `health` checks the Segtori service
 - `discover` retries service discovery
-- `snap` captures and uploads an image through the normal scan flow
+- `preview` starts the camera, warms exposure, and pumps preview frames
+- `preview-off` shuts down the camera without scanning
+- `snap` captures from the warmed camera when preview is active, otherwise
+  starts and warms the camera before capture
 
 On the nulllab ESP32-S3-CAM, pressing the onboard Boot button after startup also triggers a snap. Holding Boot during reset still selects the chip's download mode.
 
@@ -47,7 +50,8 @@ cause the LEDs to glow dimly or flicker. See the
 relevant schematic details and pin assignments.
 
 When a snap starts, the flashlight turns on at full brightness, remains on
-through capture, and quickly fades out before upload.
+through capture, and quickly fades out before upload. Preview does not hold the
+flashlight on.
 
 This is not yet the final handheld UX described in the broader project docs. Right now, the firmware is best understood as:
 
@@ -58,13 +62,33 @@ This is not yet the final handheld UX described in the broader project docs. Rig
 ## What It Currently Owns
 
 - camera initialization for the supported OV2640/OV3660 boards
-- maximum-resolution JPEG capture: 1600×1200 on OV2640 and 2048×1536 on OV3660
+- half-linear-resolution JPEG capture for the current latency trial: 800×600 on
+  OV2640 and 1024×768 on OV3660
 - Wi-Fi connection and retry behavior
 - mDNS startup and Segtori service discovery
 - periodic health checks against the Segtori service
 - image capture and multipart upload to `POST /api/scan`
 - local status tracking for debugging the current flow
 - per-snap camera initialization and shutdown to reduce idle power and stale frames
+- a preview lifecycle that keeps the camera and exposure warm until snap
+- a controller-agnostic handheld display facade for preview and state rendering
+
+## Handheld Display Framework
+
+The camera preview loop now passes throttled JPEG frames to `HandheldDisplay`.
+The default backend is intentionally disabled until a panel controller and
+wiring are selected. A panel implementation replaces the weak hooks in
+`include/display_backend.h`:
+
+- `begin()` configures the display controller and SPI bus.
+- `renderJpeg()` decodes preview JPEGs in small RGB565 blocks and pushes them
+  directly to the panel.
+- `renderState()` draws compact boot, network, upload, result, and error states.
+
+Preview is capped at 10 FPS and naturally pauses while the blocking final
+capture and upload path runs. The backend should avoid retaining a full display
+framebuffer; block or scanline JPEG decode keeps memory and copy overhead low.
+The final still remains JPEG in PSRAM for upload.
 
 ## Current Firmware State Model
 
@@ -158,11 +182,20 @@ Segtori service's `POST /api/scan` endpoint and periodically checks
 The service hosts the browser-facing development dashboard. That dashboard
 reads persisted jobs from `service/process/`; it does not trigger the camera.
 
-For reliable maximum-resolution captures, the nulllab target initializes the
-camera only for a snap, warms automatic exposure at low resolution, discards
-stale frames, captures the final full-resolution frame, and shuts the camera
-down again. The CPU runs at full speed during capture and at a reduced speed
+For reliable captures, the nulllab target initializes the camera for preview or
+a cold snap, warms automatic exposure at low resolution, discards stale
+frames, captures the final frame, and shuts the camera down after upload. The
+current latency trial captures at half the sensor's maximum width and height.
+The CPU runs at full speed while the camera is active and at a reduced speed
 while idle.
+
+The future display/control flow can call the same lifecycle used by the serial
+`preview` command while the operator holds a preview button. Preview frames are
+currently consumed and discarded where a display renderer will later receive
+them. A simultaneous snap captures from the warmed session and uploads it.
+Because the JPEG remains in the camera-owned framebuffer during upload, the
+camera shuts down immediately after upload returns that buffer rather than
+between capture and upload.
 
 ## Current Retry And Recovery Behavior
 
@@ -216,3 +249,5 @@ It does not currently parse or render the full candidate list from the server re
 - [src/main.cpp](./src/main.cpp) current boot, network, serial/button snap, and scan relay flow
 - [include/app_state.h](./include/app_state.h) firmware state model
 - [include/app_config.example.h](./include/app_config.example.h) Wi-Fi, mDNS, and fallback config shape
+- [include/display.h](./include/display.h) controller-independent handheld display facade
+- [include/display_backend.h](./include/display_backend.h) panel-specific SPI/JPEG backend contract

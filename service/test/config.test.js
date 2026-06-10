@@ -15,7 +15,7 @@ test("defaults to the ONNX backend", () => {
 
   try {
     assert.equal(loadConfig().ocr.backend, "onnx");
-    assert.equal(loadConfig().ocr.onnxProvider, "cuda");
+    assert.equal(loadConfig().ocr.onnxProvider, "auto");
     assert.equal(loadConfig().airtable.itemPartNumberField, "Part Number");
   } finally {
     if (previous === undefined) {
@@ -62,7 +62,7 @@ test("accepts the ONNX OCR backend", () => {
 
   try {
     assert.equal(loadConfig().ocr.backend, "onnx");
-    assert.equal(loadConfig().ocr.onnxProvider, "cuda");
+    assert.equal(loadConfig().ocr.onnxProvider, "auto");
   } finally {
     if (previous === undefined) {
       delete process.env.OCR_BACKEND;

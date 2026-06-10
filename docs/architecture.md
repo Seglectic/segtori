@@ -37,7 +37,10 @@ The service is responsible for OCR, inventory lookup, and inventory mutation:
 - Persist scan images, results, and failure diagnostics for local inspection.
 - Serve a local development dashboard for browsing persisted scan jobs.
 
-For Phase 1, the service can call the host `tesseract` binary directly. Later containerized versions should install Tesseract inside the Docker image.
+For Phase 1, the service can call the host `tesseract` binary directly. Phase 3
+containers standardize on the warmed RapidOCR ONNX worker instead of installing
+Tesseract. The existing Tesseract backend remains a legacy host-run diagnostic
+fallback.
 
 Phase 2 should improve recognition and matching before deployment packaging. OCR preprocessing, confidence thresholds, candidate ranking, and scan diagnostics should stay server-side so they can be tuned without changing the ESP32 firmware.
 

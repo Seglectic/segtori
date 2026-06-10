@@ -17,6 +17,8 @@ const { getOnnxWorkerClient, stopOnnxWorkers } = require("../src/services/onnx-w
 function silentLogger() {
   return {
     error() {},
+    info() {},
+    warn() {},
   };
 }
 
@@ -35,6 +37,46 @@ test("ONNX worker exposes command help", (context) => {
   });
 
   assert.match(stdout, /--provider \{auto,cpu,cuda\}/);
+});
+
+test("warns when automatic provider selection falls back to CPU", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "segtori-onnx-"));
+  const stubPath = path.join(tempRoot, "worker.js");
+  const warnings = [];
+
+  await fs.writeFile(
+    stubPath,
+    [
+      "console.log(JSON.stringify({ type: 'ready', metrics: { provider: 'cpu' } }));",
+      "process.stdin.resume();",
+    ].join("\n"),
+    "utf8"
+  );
+
+  try {
+    const client = getOnnxWorkerClient(
+      {
+        onnxPythonPath: process.execPath,
+        onnxWorkerPath: stubPath,
+        onnxProvider: "auto",
+        onnxTimeoutMs: 2000,
+      },
+      {
+        error() {},
+        info() {},
+        warn(message) {
+          warnings.push(message);
+        },
+      }
+    );
+
+    const metrics = await client.warm();
+    assert.equal(metrics.provider, "cpu");
+    assert.match(warnings[0], /continuing with CPU execution/);
+  } finally {
+    stopOnnxWorkers();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("keeps a warm ONNX worker alive across requests", async () => {

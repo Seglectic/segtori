@@ -19,6 +19,7 @@
 #endif
 #include "app_state.h"
 #include "camera_pins.h"
+#include "display.h"
 
 namespace tori {
 
@@ -26,7 +27,7 @@ constexpr uint32_t kWifiRetryIntervalMs = 12000;
 constexpr uint32_t kDiscoveryRetryIntervalMs = 15000;
 constexpr uint32_t kHealthCheckIntervalMs = 15000;
 constexpr uint16_t kFastRequestTimeoutMs = 2500;
-constexpr size_t kUploadChunkSize = 1460;
+constexpr size_t kUploadChunkSize = 16 * 1024;
 constexpr uint32_t kButtonDebounceMs = 50;
 constexpr uint8_t kCameraFlashLedcChannel = 7;
 constexpr uint16_t kCameraFlashPwmFrequencyHz = 5000;
@@ -35,7 +36,9 @@ constexpr uint8_t kCameraFlashFadeSteps = 32;
 constexpr uint8_t kCameraFlashFadeStepDelayMs = 6;
 
 DeviceState gState{};
+HandheldDisplay gDisplay{};
 bool gCameraReady = false;
+bool gPreviewActive = false;
 bool gWifiReady = false;
 bool gMdnsReady = false;
 bool gServiceReachable = false;
@@ -109,7 +112,8 @@ const char kPageHtml[] PROGMEM = R"HTML(
       <div class="card"><div class="label">Operator Roundtrip</div><div class="value hero" id="roundTrip">--</div></div>
       <div class="card"><div class="label">Capture</div><div class="value" id="captureTime">--</div></div>
       <div class="card"><div class="label">Upload + Server</div><div class="value" id="uploadTime">--</div></div>
-      <div class="card"><div class="label">Network + Response</div><div class="value" id="networkTime">--</div></div>
+      <div class="card"><div class="label">Outside Server Timer</div><div class="value" id="networkTime">--</div></div>
+      <div class="card"><div class="label">Upload Transfer</div><div class="value" id="transferTime">--</div></div>
       <div class="card"><div class="label">Server Processing</div><div class="value" id="serverTime">--</div></div>
       <div class="card"><div class="label">Server Stages</div><div class="value" id="serverStages">--</div></div>
       <div class="card"><div class="label">Browser Request</div><div class="value" id="browserTime">--</div></div>
@@ -158,6 +162,8 @@ const char kPageHtml[] PROGMEM = R"HTML(
       $("networkTime").textContent = formatMs(
         Math.max(0, (timings.uploadAndServerMs || 0) - (timings.serverTotalMs || 0))
       );
+      $("transferTime").textContent =
+        `connect ${formatMs(timings.uploadConnectMs)} · write ${formatMs(timings.uploadWriteMs)} · response ${formatMs(timings.responseWaitMs)}`;
       $("serverTime").textContent = formatMs(timings.serverTotalMs);
       $("serverStages").textContent =
         `ingest ${formatMs(timings.serverUploadIngestMs)} · persist ${formatMs(timings.serverJobPersistMs)} · OCR ${formatMs(timings.serverOcrMs)} · inventory ${formatMs(timings.serverInventoryMs)} · match ${formatMs(timings.serverMatchingMs)}`;
@@ -206,6 +212,7 @@ void setStatus(ScreenState screen, const String& status) {
 
   if (changed) {
     Serial.printf("[state] %s: %s\n", screenStateName(screen), status.c_str());
+    gDisplay.renderState(screen, status);
   }
 }
 
@@ -542,35 +549,36 @@ bool initializeCamera() {
     Serial.printf("[camera] initialization failed error=0x%x\n", result);
   } else {
     sensor_t* sensor = esp_camera_sensor_get();
-    framesize_t maximumFrameSize = FRAMESIZE_UXGA;
+    framesize_t captureFrameSize = FRAMESIZE_SVGA;
     const char* sensorName = "unknown";
 
     if (sensor) {
       if (sensor->id.PID == OV2640_PID) {
         sensorName = "OV2640";
-        maximumFrameSize = FRAMESIZE_UXGA;
+        captureFrameSize = FRAMESIZE_SVGA;
       } else if (sensor->id.PID == OV3660_PID) {
         sensorName = "OV3660";
-        maximumFrameSize = FRAMESIZE_QXGA;
+        captureFrameSize = FRAMESIZE_XGA;
       }
 
-      sensor->set_framesize(sensor, maximumFrameSize);
+      sensor->set_framesize(sensor, captureFrameSize);
       sensor->set_quality(sensor, 10);
       sensor->set_vflip(sensor, 1);
       sensor->set_hmirror(sensor, 0);
     }
 
-    gCameraFrameSize = maximumFrameSize;
+    gCameraFrameSize = captureFrameSize;
     Serial.printf("[camera] ready sensor=%s pid=0x%x frame-size=%d quality=10\n",
                   sensorName,
                   sensor ? sensor->id.PID : 0,
-                  maximumFrameSize);
+                  captureFrameSize);
   }
 
   return gCameraReady;
 }
 
 void shutdownCamera() {
+  gPreviewActive = false;
   if (!gCameraReady) {
     setCpuFrequencyMhz(80);
     return;
@@ -582,11 +590,15 @@ void shutdownCamera() {
   Serial.println("[camera] sleeping");
 }
 
-camera_fb_t* captureFreshFrame() {
+bool startCameraPreview() {
   setCpuFrequencyMhz(240);
-  if (!gCameraReady && !initializeCamera()) {
+  if (gCameraReady) {
+    return true;
+  }
+
+  if (!initializeCamera()) {
     setCpuFrequencyMhz(80);
-    return nullptr;
+    return false;
   }
 
   sensor_t* sensor = esp_camera_sensor_get();
@@ -599,12 +611,32 @@ camera_fb_t* captureFreshFrame() {
   for (uint8_t index = 0; index < 5; ++index) {
     camera_fb_t* staleFrame = esp_camera_fb_get();
     if (!staleFrame) {
-      return nullptr;
+      shutdownCamera();
+      return false;
     }
     esp_camera_fb_return(staleFrame);
     delay(40);
   }
 
+  setStatus(ScreenState::kCapturing, "Preview ready");
+  gPreviewActive = true;
+  Serial.println("[camera] preview warmed");
+  return true;
+}
+
+void stopCameraPreview() {
+  shutdownCamera();
+  if (gWifiReady && gServiceReachable) {
+    setStatus(ScreenState::kReady, "Ready to scan");
+  }
+}
+
+camera_fb_t* capturePreparedFrame() {
+  if (!startCameraPreview()) {
+    return nullptr;
+  }
+
+  sensor_t* sensor = esp_camera_sensor_get();
   if (sensor) {
     sensor->set_framesize(sensor, gCameraFrameSize);
   }
@@ -616,6 +648,18 @@ camera_fb_t* captureFreshFrame() {
   esp_camera_fb_return(staleFrame);
 
   return esp_camera_fb_get();
+}
+
+void pollCameraPreview() {
+  if (!gPreviewActive || !gCameraReady) {
+    return;
+  }
+
+  camera_fb_t* previewFrame = esp_camera_fb_get();
+  if (previewFrame) {
+    gDisplay.renderPreview(previewFrame);
+    esp_camera_fb_return(previewFrame);
+  }
 }
 
 bool checkServiceHealth(bool verbose = false) {
@@ -666,7 +710,11 @@ void publishScanTimings() {
       "{\"deviceTimings\":{\"roundTripMs\":" +
       String(gState.latestTimings.roundTripMs) + ",\"captureMs\":" +
       String(gState.latestTimings.captureMs) + ",\"uploadAndServerMs\":" +
-      String(gState.latestTimings.uploadAndServerMs) + "}}";
+      String(gState.latestTimings.uploadAndServerMs) + ",\"uploadConnectMs\":" +
+      String(gState.latestTimings.uploadConnectMs) + ",\"uploadWriteMs\":" +
+      String(gState.latestTimings.uploadWriteMs) + ",\"responseWaitMs\":" +
+      String(gState.latestTimings.responseWaitMs) + ",\"uploadBytes\":" +
+      String(gState.latestTimings.uploadBytes) + "}}";
   http.setTimeout(kFastRequestTimeoutMs);
   http.addHeader("Content-Type", "application/json");
   const int statusCode = http.POST(payload);
@@ -685,10 +733,15 @@ String extractHttpBody(const String& response) {
 
 bool uploadFrame(camera_fb_t* frame, String& body, int& statusCode) {
   WiFiClient client;
+  WiFi.setSleep(false);
+  const unsigned long connectStartedAt = millis();
   if (!client.connect(gState.serverHost.c_str(), gState.serverPort)) {
+    gState.latestTimings.uploadConnectMs = millis() - connectStartedAt;
+    WiFi.setSleep(true);
     statusCode = 0;
     return false;
   }
+  gState.latestTimings.uploadConnectMs = millis() - connectStartedAt;
 
   client.setTimeout(kAppConfig.requestTimeoutMs);
 
@@ -707,19 +760,28 @@ bool uploadFrame(camera_fb_t* frame, String& body, int& statusCode) {
   client.print("Connection: close\r\n\r\n");
   client.print(header);
 
+  const unsigned long writeStartedAt = millis();
   size_t written = 0;
   while (written < frame->len) {
     const size_t chunkSize = min(kUploadChunkSize, frame->len - written);
-    client.write(frame->buf + written, chunkSize);
-    written += chunkSize;
+    const size_t chunkWritten = client.write(frame->buf + written, chunkSize);
+    if (chunkWritten == 0) {
+      client.stop();
+      WiFi.setSleep(true);
+      statusCode = 0;
+      return false;
+    }
+    written += chunkWritten;
     delay(0);
   }
 
   client.print(footer);
+  gState.latestTimings.uploadWriteMs = millis() - writeStartedAt;
+  gState.latestTimings.uploadBytes = written;
 
   String response;
-  const unsigned long startedAt = millis();
-  while (millis() - startedAt < kAppConfig.requestTimeoutMs) {
+  const unsigned long responseStartedAt = millis();
+  while (millis() - responseStartedAt < kAppConfig.requestTimeoutMs) {
     while (client.available()) {
       response += static_cast<char>(client.read());
     }
@@ -732,7 +794,9 @@ bool uploadFrame(camera_fb_t* frame, String& body, int& statusCode) {
   }
 
   const bool timedOut = client.connected();
+  gState.latestTimings.responseWaitMs = millis() - responseStartedAt;
   client.stop();
+  WiFi.setSleep(true);
   if (timedOut) {
     Serial.println("[snap] response timed out");
   }
@@ -757,6 +821,10 @@ String buildStatusJson() {
   json += "\"captureMs\":" + String(gState.latestTimings.captureMs) + ",";
   json += "\"uploadAndServerMs\":" +
           String(gState.latestTimings.uploadAndServerMs) + ",";
+  json += "\"uploadConnectMs\":" + String(gState.latestTimings.uploadConnectMs) + ",";
+  json += "\"uploadWriteMs\":" + String(gState.latestTimings.uploadWriteMs) + ",";
+  json += "\"responseWaitMs\":" + String(gState.latestTimings.responseWaitMs) + ",";
+  json += "\"uploadBytes\":" + String(gState.latestTimings.uploadBytes) + ",";
   json += "\"serverTotalMs\":" + String(gState.latestTimings.serverTotalMs) + ",";
   json += "\"serverUploadIngestMs\":" +
           String(gState.latestTimings.serverUploadIngestMs) + ",";
@@ -835,7 +903,7 @@ ScanResult runScan() {
   }
 
   const unsigned long captureStartedAt = millis();
-  camera_fb_t* frame = captureFreshFrame();
+  camera_fb_t* frame = capturePreparedFrame();
   gState.latestTimings.captureMs = millis() - captureStartedAt;
   if (!frame) {
     fadeCameraFlashOut();
@@ -846,7 +914,7 @@ ScanResult runScan() {
     return result;
   }
 
-  Serial.printf("[snap] captured %u bytes\n", frame->len);
+  Serial.printf("[snap] captured %ux%u %u bytes\n", frame->width, frame->height, frame->len);
   fadeCameraFlashOut();
   setStatus(ScreenState::kUploading, "Uploading snap");
   result.statusCode = 0;
@@ -872,10 +940,13 @@ ScanResult runScan() {
   applyScanResponse(result.body);
   gState.latestTimings.roundTripMs = millis() - roundTripStartedAt;
   Serial.printf(
-      "[timing] roundtrip=%lu capture=%lu upload_server=%lu server=%lu ocr=%lu\n",
+      "[timing] roundtrip=%lu capture=%lu upload_server=%lu connect=%lu write=%lu response=%lu server=%lu ocr=%lu\n",
       static_cast<unsigned long>(gState.latestTimings.roundTripMs),
       static_cast<unsigned long>(gState.latestTimings.captureMs),
       static_cast<unsigned long>(gState.latestTimings.uploadAndServerMs),
+      static_cast<unsigned long>(gState.latestTimings.uploadConnectMs),
+      static_cast<unsigned long>(gState.latestTimings.uploadWriteMs),
+      static_cast<unsigned long>(gState.latestTimings.responseWaitMs),
       static_cast<unsigned long>(gState.latestTimings.serverTotalMs),
       static_cast<unsigned long>(gState.latestTimings.serverOcrMs));
   Serial.printf("[snap] result id=%s match=%s score=%.3f\n",
@@ -908,7 +979,7 @@ void pollNetworkState() {
   if (gWifiReady && now - gLastHealthCheckMs >= kHealthCheckIntervalMs) {
     gLastHealthCheckMs = now;
     checkServiceHealth();
-    if (gServiceReachable) {
+    if (gServiceReachable && !gPreviewActive) {
       setStatus(ScreenState::kReady, "Ready to scan");
     } else if (gLastError.isEmpty()) {
       setStatus(ScreenState::kDiscoveringService, "Waiting for service");
@@ -922,7 +993,9 @@ void printSerialHelp() {
   Serial.println("  status    Show device status");
   Serial.println("  health    Check Segtori service health");
   Serial.println("  discover  Rediscover the Segtori service");
-  Serial.println("  snap      Capture and upload an image");
+  Serial.println("  preview      Start and warm the camera");
+  Serial.println("  preview-off  Stop the camera without scanning");
+  Serial.println("  snap         Capture from the warm camera and upload");
 }
 
 void printSerialPrompt() {
@@ -946,6 +1019,11 @@ void runSerialCommand(String command) {
   } else if (command == "discover") {
     gLastDiscoveryMs = 0;
     discoverService(true);
+  } else if (command == "preview") {
+    Serial.printf("[command] preview %s\n", startCameraPreview() ? "ready" : "failed");
+  } else if (command == "preview-off") {
+    stopCameraPreview();
+    Serial.println("[command] preview stopped");
   } else if (command == "snap") {
     Serial.println("[command] starting snap");
     const ScanResult result = runScan();
@@ -1038,6 +1116,7 @@ void setup() {
   delay(1200);
   Serial.println();
   Serial.println("[boot] Segtori firmware starting");
+  tori::gDisplay.begin();
   esp_log_level_set("gdma", ESP_LOG_NONE);
   Serial.printf("[boot] chip=%s revision=%u flash=%u psram=%u\n",
                 ESP.getChipModel(),
@@ -1063,6 +1142,7 @@ void setup() {
 void loop() {
   tori::pollSerialCommands();
   tori::pollSnapButton();
+  tori::pollCameraPreview();
   tori::pollNetworkState();
   delay(20);
 }

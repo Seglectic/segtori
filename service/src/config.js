@@ -24,7 +24,7 @@ function readOcrBackend(value) {
 }
 
 function readOnnxProvider(value) {
-  const provider = value || "cuda";
+  const provider = value || "auto";
 
   if (!["auto", "cpu", "cuda"].includes(provider)) {
     throw new Error(`Unsupported ONNX provider: ${provider}`);
