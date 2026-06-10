@@ -14,36 +14,52 @@ const { createMatchTextRouter } = require("./routes/match-text");
 const { createScanRouter } = require("./routes/scan");
 const { startMdnsAdvertisement } = require("./services/discovery");
 const { listInventoryItems, updateItemQuantity } = require("./services/inventory");
-const { rankInventoryMatches } = require("./services/matcher");
-const { extractTextFromImage } = require("./services/ocr");
+const {
+  evaluateMatchConfidence,
+  rankInventoryMatches,
+} = require("./services/matcher");
+const {
+  extractTextVariantsFromImage,
+  stopOnnxWorkers,
+  warmOnnxOcr,
+} = require("./services/ocr");
+const { createLiveJobFeed } = require("./services/live-jobs");
 const { createScanJobStore } = require("./services/scan-jobs");
 const { uploadImage } = require("./services/uploads");
 
 function createApp(config, logger = console) {
   const app = express();
   let discovery = null;
-  const scanJobStore = createScanJobStore(config);
+  const liveJobFeed = createLiveJobFeed(logger);
+  const scanJobStore = createScanJobStore(config, (job) => liveJobFeed.publish(job));
 
   app.use(express.json());
 
-  app.use("/", createJobsRouter(config));
+  app.use("/", createJobsRouter(config, scanJobStore));
   app.use("/api/health", createHealthRouter(config));
   app.use(
     "/api/match-text",
     createMatchTextRouter({
       listInventoryItems,
       rankInventoryMatches,
+      evaluateMatchConfidence,
       matchLimit: config.match.maxCandidates,
+      matchMinScore: config.match.minScore,
+      matchMinMargin: config.match.minMargin,
     })
   );
   app.use(
     "/api/scan",
     createScanRouter({
       uploadImage,
-      extractTextFromImage,
+      extractTextVariantsFromImage,
       listInventoryItems,
       rankInventoryMatches,
+      evaluateMatchConfidence,
       matchLimit: config.match.maxCandidates,
+      matchMinScore: config.match.minScore,
+      matchMinMargin: config.match.minMargin,
+      ocrConfig: config.ocr,
       scanJobStore,
     })
   );
@@ -64,12 +80,22 @@ function createApp(config, logger = console) {
 
   return {
     app,
+    async warm() {
+      if (config.ocr.backend === "onnx") {
+        await warmOnnxOcr(config.ocr);
+      }
+    },
+    attachServer(server) {
+      liveJobFeed.attach(server);
+    },
     startDiscovery() {
       if (!discovery) {
         discovery = startMdnsAdvertisement(config, logger);
       }
     },
     stop() {
+      liveJobFeed.stop();
+      stopOnnxWorkers();
       if (discovery) {
         discovery.stop();
         discovery = null;

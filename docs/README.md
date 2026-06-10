@@ -36,6 +36,7 @@ Current checked progress and the immediate work queue live in [status.md](./stat
 ## Architecture References
 
 - [architecture.md](./architecture.md): firmware/server split, API shape, discovery, and inventory backend flow.
+- [onnx-ocr.md](./onnx-ocr.md): RapidOCR setup, CUDA isolation, benchmark results, warm-worker behavior, and optimization direction.
 - [design.md](./design.md): device and screen design principles.
 - [hardware/nulllab-esp32s3-cam.md](./hardware/nulllab-esp32s3-cam.md): primary development board, relevant pins, flashlight circuit, and power notes.
 
@@ -45,7 +46,8 @@ Current checked progress and the immediate work queue live in [status.md](./stat
 - Legacy firmware target: AI Thinker ESP32-CAM using an OV2640 sensor.
 - Firmware framework: PlatformIO with Arduino for ESP32.
 - Server runtime: Node.js with Express.
-- OCR engine: host-installed `tesseract` binary for Phase 1.
+- Default OCR engine: RapidOCR ONNX with strict CUDA execution and a warmed worker.
+- Fallback OCR engine: host-installed `tesseract` binary.
 - Discovery: mDNS using `_segtori-ocr._tcp.local`.
 - Inventory source: Airtable for Phase 1.
 - Local inventory backend: planned future support.

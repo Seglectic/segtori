@@ -2,6 +2,38 @@
 
 Phase 2 improves the core scan and identify loop while it is still easy to iterate on the server.
 
+## Progress Checklist
+
+### Recognition And Matching
+
+- [x] Add normalized and thresholded Tesseract preprocessing profiles.
+- [x] Select the strongest OCR profile per scan.
+- [x] Normalize inventory text and support optional aliases.
+- [x] Add configurable score and runner-up margin confidence gates.
+- [x] Return ranked candidates while withholding uncertain automatic matches.
+- [x] Add a swappable Ollama vision backend and evaluate small local models.
+- [x] Add RapidOCR ONNX recognition with verified GPU acceleration.
+- [ ] Evaluate RapidOCR accuracy on the labeled dataset.
+- [x] Evaluate a persistent ONNX worker against the process-per-scan baseline.
+
+### Diagnostics And Evaluation
+
+- [x] Add an ignored paired high/low-resolution evaluation dataset.
+- [x] Add a repeatable dataset benchmark utility.
+- [x] Persist backend, preprocessing, OCR, match, and timing diagnostics.
+- [x] Support optional processed debug images.
+- [x] Expose operator roundtrip and server-stage timings in the scan frontend.
+- [ ] Label representative ground truth without tuning specifically to the dataset.
+- [ ] Annotate unusably blurred or otherwise invalid samples.
+- [ ] Demonstrate improved accuracy on a labeled holdout set.
+
+### Firmware And Exit Criteria
+
+- [ ] Add candidate browsing and confirmation for uncertain matches.
+- [ ] Demonstrate materially improved match accuracy on representative labels.
+- [ ] Keep uncertain matches from silently producing incorrect updates.
+- [ ] Validate acceptable handheld trigger-to-result latency.
+
 ## Goals
 
 - Improve OCR quality for real labels and tags.
@@ -11,7 +43,19 @@ Phase 2 improves the core scan and identify loop while it is still easy to itera
 
 ## Server Behavior
 
-The server should add image preprocessing before Tesseract:
+The server should support swappable recognition backends so accuracy and
+resource tradeoffs can be evaluated without changing the firmware API:
+
+- Keep Tesseract as the lightweight default backend.
+- Support a local Ollama vision backend for experimental visual transcription.
+- Keep RapidOCR ONNX available as the dedicated GPU-accelerated OCR path.
+- Keep the RapidOCR worker warm so scans avoid repeated model startup cost.
+- Keep backend name, model, latency, and preprocessing diagnostics visible.
+- Treat handheld trigger-to-result roundtrip as the primary operator latency
+  metric, with capture, network/upload, OCR, inventory, and matching stages
+  exposed for diagnosis.
+
+The Tesseract backend should add image preprocessing:
 
 - Resize images to a predictable OCR-friendly range.
 - Convert images to grayscale.
@@ -25,6 +69,8 @@ The matching layer should become more robust:
 - Score item names with token-aware fuzzy matching.
 - Support aliases or keywords for inventory records when available.
 - Use a configurable minimum confidence threshold.
+- Require enough separation between the best and runner-up candidates before
+  accepting an automatic match.
 - Return ranked candidates when the best match is uncertain.
 
 The server should support diagnostics when debug mode is enabled:
@@ -34,6 +80,14 @@ The server should support diagnostics when debug mode is enabled:
 - Preprocessing mode used.
 - Optional saved original and processed images.
 - A scan ID that can be used to inspect debug output.
+
+The server diagnostic web interface should make this information easy to scan:
+
+- Prioritize scan status, accepted or withheld match, confidence, and latency.
+- Make OCR text, ranked candidates, and provider/stage metrics easy to inspect.
+- Clearly distinguish weak OCR, weak score, and insufficient runner-up margin.
+- Keep the interface focused on development diagnostics rather than becoming a
+  second device-facing product UI.
 
 ## Firmware Behavior
 
@@ -49,9 +103,32 @@ The firmware API should remain the same. Phase 2 firmware changes should focus o
 Additional server configuration:
 
 - `MATCH_MIN_SCORE`: minimum score for an automatic best match.
+- `MATCH_MIN_MARGIN`: minimum score separation from the runner-up.
 - `SCAN_DEBUG_ENABLED`: enables scan diagnostics.
 - `SCAN_DEBUG_DIR`: stores debug images and metadata when diagnostics are enabled.
 - `OCR_PREPROCESS_MODE`: selects the preprocessing profile, default `auto`.
+- `OCR_BACKEND`: selects `tesseract`, `ollama`, or `onnx`.
+- `OLLAMA_VISION_MODEL`: selects the local vision model.
+- `OLLAMA_KEEP_ALIVE`: keeps a loaded model resident between scans.
+- `OLLAMA_CONTEXT_SIZE`: sets an explicit vision-capable context size.
+- `OLLAMA_IMAGE_MAX_SIZE`: limits image size before visual inference.
+- `ONNX_PROVIDER`: selects `auto`, `cpu`, or strict `cuda` execution.
+- `ONNX_PYTHON_PATH`: selects the isolated RapidOCR worker environment.
+- `ONNX_TIMEOUT_MS`: limits one ONNX worker request.
+
+## Evaluation Approach
+
+- Keep local evaluation images and generated reports outside Git.
+- Treat blurry or otherwise unusable images as annotated invalid samples rather
+  than tuning preprocessing around them.
+- Use broad preprocessing profiles that generalize beyond the current dataset.
+- Measure accuracy against labeled ground truth or a labeled holdout set.
+- Treat OCR coverage, confidence scores, and high/low pair agreement as
+  diagnostics only when ground truth is unavailable.
+- Reject a backend when its latency, resource use, or false-confidence behavior
+  is unsuitable even if its transcriptions appear stronger on a small sample.
+- The persistent ONNX worker is now the baseline; keep measuring it against
+  dataset and handheld latency targets as the backend evolves.
 
 ## Acceptance Criteria
 
@@ -59,4 +136,3 @@ Additional server configuration:
 - Uncertain scans return candidates instead of selecting a weak match without confirmation.
 - Debug output can explain why a scan matched or failed.
 - The firmware-facing scan and quantity endpoints remain compatible with Phase 1.
-

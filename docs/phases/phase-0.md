@@ -2,6 +2,23 @@
 
 Phase 0 establishes the repository shape and project contracts before feature work starts.
 
+## Progress Checklist
+
+### Scaffolding
+
+- [x] Establish separate firmware, service, documentation, and utility areas.
+- [x] Initialize the ESP32 PlatformIO firmware project.
+- [x] Initialize the Node.js service project.
+- [x] Define the initial firmware-facing HTTP API.
+- [x] Document environment-based service configuration.
+- [x] Add Docker and Compose scaffolding.
+
+### Exit Criteria
+
+- [x] Firmware and service projects build or start independently.
+- [x] Repository structure and initial contracts are documented.
+- [x] Phase 1 feature work can proceed without restructuring the project.
+
 ## Goals
 
 - Keep firmware and service work separate but coordinated.

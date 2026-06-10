@@ -105,10 +105,22 @@ const char kPageHtml[] PROGMEM = R"HTML(
       <div class="card"><div class="label">Quantity</div><div class="value hero" id="qty">--</div></div>
       <div class="card"><div class="label">Confidence</div><div class="value" id="score">--</div></div>
     </section>
+    <section class="grid result">
+      <div class="card"><div class="label">Operator Roundtrip</div><div class="value hero" id="roundTrip">--</div></div>
+      <div class="card"><div class="label">Capture</div><div class="value" id="captureTime">--</div></div>
+      <div class="card"><div class="label">Upload + Server</div><div class="value" id="uploadTime">--</div></div>
+      <div class="card"><div class="label">Network + Response</div><div class="value" id="networkTime">--</div></div>
+      <div class="card"><div class="label">Server Processing</div><div class="value" id="serverTime">--</div></div>
+      <div class="card"><div class="label">Server Stages</div><div class="value" id="serverStages">--</div></div>
+      <div class="card"><div class="label">Browser Request</div><div class="value" id="browserTime">--</div></div>
+    </section>
   </main>
   <script>
     const $ = (id) => document.getElementById(id);
     const scanButton = $("scan");
+    const formatMs = (value) => Number.isFinite(value) && value > 0
+      ? (value >= 1000 ? `${(value / 1000).toFixed(2)} s` : `${value} ms`)
+      : "--";
 
     function setPill(ok, wifi) {
       const pill = $("pill");
@@ -139,6 +151,16 @@ const char kPageHtml[] PROGMEM = R"HTML(
       }
 
       $("ocr").textContent = data.ocrText || "---";
+      const timings = data.timings || {};
+      $("roundTrip").textContent = formatMs(timings.roundTripMs);
+      $("captureTime").textContent = formatMs(timings.captureMs);
+      $("uploadTime").textContent = formatMs(timings.uploadAndServerMs);
+      $("networkTime").textContent = formatMs(
+        Math.max(0, (timings.uploadAndServerMs || 0) - (timings.serverTotalMs || 0))
+      );
+      $("serverTime").textContent = formatMs(timings.serverTotalMs);
+      $("serverStages").textContent =
+        `ingest ${formatMs(timings.serverUploadIngestMs)} · persist ${formatMs(timings.serverJobPersistMs)} · OCR ${formatMs(timings.serverOcrMs)} · inventory ${formatMs(timings.serverInventoryMs)} · match ${formatMs(timings.serverMatchingMs)}`;
     }
 
     async function refresh() {
@@ -149,6 +171,7 @@ const char kPageHtml[] PROGMEM = R"HTML(
     async function runScan() {
       scanButton.disabled = true;
       $("status").textContent = "Capturing image";
+      const startedAt = performance.now();
       try {
         const response = await fetch("/api/scan", { method: "POST" });
         const data = await response.json();
@@ -156,7 +179,9 @@ const char kPageHtml[] PROGMEM = R"HTML(
           throw new Error(data.error || "scan failed");
         }
         await refresh();
-        $("status").textContent = "Scan complete";
+        const browserMs = Math.round(performance.now() - startedAt);
+        $("browserTime").textContent = formatMs(browserMs);
+        $("status").textContent = `Scan complete in ${formatMs(browserMs)}`;
       } catch (error) {
         $("status").textContent = error.message;
       } finally {
@@ -357,6 +382,7 @@ void clearMatch() {
   gLastScanId = "";
   gState.latestOcrText = "";
   gState.latestMatch = MatchSummary{};
+  gState.latestTimings = ScanTimings{};
 }
 
 void applyScanResponse(const String& body) {
@@ -367,6 +393,19 @@ void applyScanResponse(const String& body) {
   gState.latestMatch.name = extractJsonString(matchObject, "name");
   gState.latestMatch.quantity = extractJsonInt(matchObject, "quantity", 0);
   gState.latestMatch.score = extractJsonFloat(matchObject, "score", 0.0F);
+  const String timingsObject = extractJsonObject(body, "timings");
+  gState.latestTimings.serverTotalMs =
+      extractJsonInt(timingsObject, "serverTotalMs", 0);
+  gState.latestTimings.serverUploadIngestMs =
+      extractJsonInt(timingsObject, "uploadIngestMs", 0);
+  gState.latestTimings.serverJobPersistMs =
+      extractJsonInt(timingsObject, "jobPersistMs", 0);
+  gState.latestTimings.serverOcrMs =
+      extractJsonInt(timingsObject, "ocrMs", 0);
+  gState.latestTimings.serverInventoryMs =
+      extractJsonInt(timingsObject, "inventoryMs", 0);
+  gState.latestTimings.serverMatchingMs =
+      extractJsonInt(timingsObject, "matchingMs", 0);
 }
 
 bool connectWifi() {
@@ -609,6 +648,32 @@ bool checkServiceHealth(bool verbose = false) {
   return gServiceReachable;
 }
 
+void publishScanTimings() {
+  if (!gServiceReachable || gLastScanId.isEmpty()) {
+    return;
+  }
+
+  HTTPClient http;
+  WiFiClient client;
+  const String url = "http://" + gState.serverHost + ":" +
+                     String(gState.serverPort) + "/api/jobs/" + gLastScanId +
+                     "/timings";
+  if (!http.begin(client, url)) {
+    return;
+  }
+
+  const String payload =
+      "{\"deviceTimings\":{\"roundTripMs\":" +
+      String(gState.latestTimings.roundTripMs) + ",\"captureMs\":" +
+      String(gState.latestTimings.captureMs) + ",\"uploadAndServerMs\":" +
+      String(gState.latestTimings.uploadAndServerMs) + "}}";
+  http.setTimeout(kFastRequestTimeoutMs);
+  http.addHeader("Content-Type", "application/json");
+  const int statusCode = http.POST(payload);
+  http.end();
+  Serial.printf("[timing] telemetry status=%d\n", statusCode);
+}
+
 String extractHttpBody(const String& response) {
   const int separator = response.indexOf("\r\n\r\n");
   if (separator < 0) {
@@ -687,6 +752,21 @@ String buildStatusJson() {
   json += "\"lastScanId\":\"" + jsonEscape(gLastScanId) + "\",";
   json += "\"ocrText\":\"" + jsonEscape(gState.latestOcrText) + "\",";
   json += "\"lastError\":\"" + jsonEscape(gLastError) + "\",";
+  json += "\"timings\":{";
+  json += "\"roundTripMs\":" + String(gState.latestTimings.roundTripMs) + ",";
+  json += "\"captureMs\":" + String(gState.latestTimings.captureMs) + ",";
+  json += "\"uploadAndServerMs\":" +
+          String(gState.latestTimings.uploadAndServerMs) + ",";
+  json += "\"serverTotalMs\":" + String(gState.latestTimings.serverTotalMs) + ",";
+  json += "\"serverUploadIngestMs\":" +
+          String(gState.latestTimings.serverUploadIngestMs) + ",";
+  json += "\"serverJobPersistMs\":" +
+          String(gState.latestTimings.serverJobPersistMs) + ",";
+  json += "\"serverOcrMs\":" + String(gState.latestTimings.serverOcrMs) + ",";
+  json += "\"serverInventoryMs\":" +
+          String(gState.latestTimings.serverInventoryMs) + ",";
+  json += "\"serverMatchingMs\":" +
+          String(gState.latestTimings.serverMatchingMs) + "},";
   json += "\"match\":{";
   json += "\"id\":\"" + jsonEscape(gState.latestMatch.id) + "\",";
   json += "\"name\":\"" + jsonEscape(gState.latestMatch.name) + "\",";
@@ -722,6 +802,7 @@ void fadeCameraFlashOut() {
 
 ScanResult runScan() {
   ScanResult result;
+  const unsigned long roundTripStartedAt = millis();
   turnCameraFlashOn();
 
   if (!gWifiReady) {
@@ -753,7 +834,9 @@ ScanResult runScan() {
     return result;
   }
 
+  const unsigned long captureStartedAt = millis();
   camera_fb_t* frame = captureFreshFrame();
+  gState.latestTimings.captureMs = millis() - captureStartedAt;
   if (!frame) {
     fadeCameraFlashOut();
     shutdownCamera();
@@ -767,7 +850,9 @@ ScanResult runScan() {
   fadeCameraFlashOut();
   setStatus(ScreenState::kUploading, "Uploading snap");
   result.statusCode = 0;
+  const unsigned long uploadStartedAt = millis();
   result.ok = uploadFrame(frame, result.body, result.statusCode);
+  gState.latestTimings.uploadAndServerMs = millis() - uploadStartedAt;
   esp_camera_fb_return(frame);
   shutdownCamera();
 
@@ -785,12 +870,21 @@ ScanResult runScan() {
 
   Serial.printf("[snap] upload complete status=%d\n", result.statusCode);
   applyScanResponse(result.body);
+  gState.latestTimings.roundTripMs = millis() - roundTripStartedAt;
+  Serial.printf(
+      "[timing] roundtrip=%lu capture=%lu upload_server=%lu server=%lu ocr=%lu\n",
+      static_cast<unsigned long>(gState.latestTimings.roundTripMs),
+      static_cast<unsigned long>(gState.latestTimings.captureMs),
+      static_cast<unsigned long>(gState.latestTimings.uploadAndServerMs),
+      static_cast<unsigned long>(gState.latestTimings.serverTotalMs),
+      static_cast<unsigned long>(gState.latestTimings.serverOcrMs));
   Serial.printf("[snap] result id=%s match=%s score=%.3f\n",
                 gLastScanId.c_str(),
                 gState.latestMatch.name.c_str(),
                 gState.latestMatch.score);
   setStatus(ScreenState::kShowingMatch,
             gState.latestMatch.name.isEmpty() ? "Scan complete, no match" : "Match received");
+  publishScanTimings();
   return result;
 }
 

@@ -74,6 +74,10 @@ function scoreItem(ocrText, item) {
     scores.push(scoreCandidate(ocrText, item.secondaryName));
   }
 
+  for (const alias of item.aliases ?? []) {
+    scores.push(scoreCandidate(ocrText, alias));
+  }
+
   return Math.max(...scores);
 }
 
@@ -92,6 +96,30 @@ function rankInventoryMatches(ocrText, items, limit = 5) {
     .slice(0, limit);
 }
 
+function evaluateMatchConfidence(candidates, minScore, minMargin) {
+  const bestCandidate = candidates[0] || null;
+  const runnerUp = candidates[1] || null;
+  const runnerUpScore = runnerUp?.score || 0;
+  const margin = Number(
+    ((bestCandidate?.score || 0) - runnerUpScore).toFixed(3)
+  );
+  const accepted = Boolean(
+    bestCandidate &&
+      bestCandidate.score >= minScore &&
+      ((bestCandidate.score === 1 && runnerUpScore < 1) || margin >= minMargin)
+  );
+
+  return {
+    accepted,
+    score: bestCandidate?.score || 0,
+    minScore,
+    margin,
+    minMargin,
+  };
+}
+
 module.exports = {
+  evaluateMatchConfidence,
+  normalizeText,
   rankInventoryMatches,
 };

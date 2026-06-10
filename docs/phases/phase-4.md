@@ -2,6 +2,25 @@
 
 Phase 4 adds a local inventory option for home or offline use while preserving the firmware API.
 
+## Progress Checklist
+
+### Backend
+
+- [x] Establish a stable firmware-facing scan and quantity API.
+- [x] Implement the Airtable inventory backend.
+- [ ] Add `INVENTORY_BACKEND` selection.
+- [ ] Add a SQLite local inventory backend.
+- [ ] List and create local inventory items through the API.
+- [ ] Import local inventory from CSV or JSON.
+- [ ] Export local inventory to CSV or JSON.
+
+### Exit Criteria
+
+- [ ] Airtable and local modes satisfy the same scan and quantity contract.
+- [ ] Switching inventory backends requires no firmware changes.
+- [ ] Local inventory persists across service restarts.
+- [ ] Imported inventory works with the Phase 2 matching layer.
+
 ## Goals
 
 - Support Airtable and local inventory behind the same server API.
@@ -35,4 +54,3 @@ Additional endpoints for local inventory support:
 - Switching backends does not require firmware changes.
 - Local inventory data persists across server restarts.
 - Import data can be matched by the same Phase 2 matching layer.
-

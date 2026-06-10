@@ -28,7 +28,7 @@ The service is responsible for OCR, inventory lookup, and inventory mutation:
 
 - Advertise itself on the network with mDNS.
 - Receive image uploads from the ESP32.
-- Run Tesseract OCR.
+- Run the configured Tesseract, Ollama, or RapidOCR ONNX recognition backend.
 - Normalize OCR text.
 - Fetch inventory records from Airtable.
 - Match OCR text to the closest inventory item.
@@ -40,6 +40,13 @@ The service is responsible for OCR, inventory lookup, and inventory mutation:
 For Phase 1, the service can call the host `tesseract` binary directly. Later containerized versions should install Tesseract inside the Docker image.
 
 Phase 2 should improve recognition and matching before deployment packaging. OCR preprocessing, confidence thresholds, candidate ranking, and scan diagnostics should stay server-side so they can be tuned without changing the ESP32 firmware.
+
+The RapidOCR ONNX backend runs in an isolated Python environment that the
+Node.js service keeps warm across scans. Its CUDA 12 and cuDNN 9 runtime
+libraries coexist with the host CUDA toolkit. Provider and stage diagnostics
+are returned through the same scan-result path used by the other recognition
+backends. See [onnx-ocr.md](./onnx-ocr.md) for setup, measurements, and the
+current warm-worker shape.
 
 ## Discovery
 
@@ -147,13 +154,17 @@ Planned diagnostic endpoint:
 
 Current Phase 1 development endpoints:
 
-- `GET /`: serves a manually refreshed gallery of persisted scan jobs.
-- `GET /api/jobs`: lists persisted scan jobs.
+- `GET /`: serves a live, incrementally loaded gallery of persisted scan jobs.
+- `GET /api/jobs`: lists persisted scan jobs in cursor-paginated batches.
 - `GET /api/jobs/:id`: returns one persisted scan job.
 - `GET /jobs/:id/image`: returns the original image for a persisted scan job.
+- `WS /ws/jobs`: publishes ingested, completed, and failed scan-job updates.
 
 These endpoints expose development diagnostics and are not part of the
 firmware-facing API contract.
+
+The service advertises `tori.local` as its default mDNS host so the dashboard
+is reachable on the LAN at `http://tori.local:8674/`.
 
 ## Scan Job Persistence
 
@@ -173,6 +184,9 @@ Phase 2 scan quality configuration:
 - `SCAN_DEBUG_ENABLED`: enables scan diagnostics.
 - `SCAN_DEBUG_DIR`: stores diagnostic output.
 - `OCR_PREPROCESS_MODE`: selects the preprocessing profile.
+- `OCR_BACKEND`: selects `tesseract`, `ollama`, or `onnx`.
+- `ONNX_PROVIDER`: selects automatic, CPU, or strict CUDA ONNX execution.
+- `ONNX_PYTHON_PATH`: selects the isolated RapidOCR worker environment.
 
 Later inventory configuration:
 

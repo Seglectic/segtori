@@ -30,7 +30,7 @@ function imageExtensionFor(file) {
   return ".jpg";
 }
 
-function createScanJobStore(config) {
+function createScanJobStore(config, publishJob = () => {}) {
   const ingestDir = config.scanJobs.ingestDir;
 
   async function writeJobFile(jobDir, payload) {
@@ -39,6 +39,7 @@ function createScanJobStore(config) {
       JSON.stringify(payload, null, 2) + "\n",
       "utf8"
     );
+    publishJob(payload);
   }
 
   async function readJobFile(jobDir) {
@@ -112,6 +113,10 @@ function createScanJobStore(config) {
           message: error.message || "scan job failed",
         },
       });
+    },
+
+    async deleteJob(job) {
+      await fs.rm(job.jobDir, { recursive: true, force: true });
     },
   };
 }

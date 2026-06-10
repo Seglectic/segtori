@@ -2,6 +2,24 @@
 
 Phase 6 defines the physical device direction and validates practical use.
 
+## Progress Checklist
+
+### Hardware Validation
+
+- [ ] Select and document the enclosure, battery, charging, display, and controls.
+- [ ] Validate camera placement, lens opening, and quick label framing.
+- [ ] Validate USB/service access, mounting, and internal cable routing.
+- [ ] Measure battery runtime during repeated scan and update sessions.
+- [ ] Validate display readability and control comfort in expected work areas.
+- [ ] Validate reliable Wi-Fi operation during normal LAN use.
+
+### Exit Criteria
+
+- [ ] Complete repeated scan and update sessions on battery.
+- [ ] Confirm the screen, camera, and controls are practical for repeated use.
+- [ ] Confirm the assembled device is serviceable and mechanically reliable.
+- [ ] Confirm LAN connectivity is reliable enough for field use.
+
 ## Goals
 
 - Turn the prototype into a reliable handheld device.

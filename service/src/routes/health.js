@@ -17,6 +17,13 @@ function createHealthRouter(config) {
       version: config.serviceVersion,
       mdnsName: config.mdnsName,
       port: config.port,
+      ocrBackend: config.ocr.backend,
+      ocrModel:
+        config.ocr.backend === "ollama"
+          ? config.ocr.ollamaModel
+          : config.ocr.backend === "onnx"
+            ? "rapidocr"
+            : "tesseract",
     });
   });
 

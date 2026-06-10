@@ -33,15 +33,27 @@ function normalizeItemRecord(record, config) {
   const explicitId = config.airtable.itemIdField ? fields[config.airtable.itemIdField] : "";
   const quantityValue = Number(fields[config.airtable.quantityField] ?? 0);
   const primaryName = String(fields[config.airtable.itemNameField] ?? "").trim();
+  const partNumber = config.airtable.itemPartNumberField
+    ? String(fields[config.airtable.itemPartNumberField] ?? "").trim()
+    : "";
   const secondaryName = config.airtable.itemSecondaryNameField
     ? String(fields[config.airtable.itemSecondaryNameField] ?? "").trim()
     : "";
+  const aliasesValue = config.airtable.itemAliasesField
+    ? fields[config.airtable.itemAliasesField]
+    : [];
+  const aliases = (Array.isArray(aliasesValue) ? aliasesValue : [aliasesValue])
+    .flatMap((value) => String(value ?? "").split(/[,;\n]/))
+    .map((value) => value.trim())
+    .filter(Boolean);
 
   return {
     id: String(explicitId || record.id),
     recordId: record.id,
     name: primaryName,
+    partNumber,
     secondaryName,
+    aliases,
     quantity: Number.isFinite(quantityValue) ? quantityValue : 0,
   };
 }
@@ -67,6 +79,7 @@ async function listInventoryItems() {
     const url = new URL(getTablePath(config));
     url.searchParams.set("pageSize", "100");
     url.searchParams.append("fields[]", config.airtable.itemNameField);
+    url.searchParams.append("fields[]", config.airtable.itemPartNumberField);
     url.searchParams.append("fields[]", config.airtable.quantityField);
 
     if (config.airtable.itemIdField) {
@@ -75,6 +88,10 @@ async function listInventoryItems() {
 
     if (config.airtable.itemSecondaryNameField) {
       url.searchParams.append("fields[]", config.airtable.itemSecondaryNameField);
+    }
+
+    if (config.airtable.itemAliasesField) {
+      url.searchParams.append("fields[]", config.airtable.itemAliasesField);
     }
 
     if (config.airtable.viewId) {

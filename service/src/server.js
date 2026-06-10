@@ -10,20 +10,28 @@ require("dotenv").config();
 const { createApp } = require("./app");
 const { loadConfig } = require("./config");
 
-const config = loadConfig();
-const service = createApp(config, console);
+(async () => {
+  const config = loadConfig();
+  const service = createApp(config, console);
 
-const server = service.app.listen(config.port, () => {
-  console.log(`[http] listening on ${config.port}`);
-  service.startDiscovery();
-});
+  await service.warm();
 
-function shutdown() {
-  server.close(() => {
-    service.stop();
-    process.exit(0);
+  const server = service.app.listen(config.port, () => {
+    console.log(`[http] listening on ${config.port}`);
+    service.startDiscovery();
   });
-}
+  service.attachServer(server);
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+  function shutdown() {
+    service.stop();
+    server.close(() => {
+      process.exit(0);
+    });
+  }
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

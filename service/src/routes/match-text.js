@@ -7,7 +7,14 @@
 
 const express = require("express");
 
-function createMatchTextRouter({ listInventoryItems, rankInventoryMatches, matchLimit }) {
+function createMatchTextRouter({
+  listInventoryItems,
+  rankInventoryMatches,
+  evaluateMatchConfidence,
+  matchLimit,
+  matchMinScore,
+  matchMinMargin,
+}) {
   const router = express.Router();
 
   router.post("/", async (request, response, next) => {
@@ -24,13 +31,20 @@ function createMatchTextRouter({ listInventoryItems, rankInventoryMatches, match
 
       const items = await listInventoryItems();
       const candidates = rankInventoryMatches(text, items, matchLimit);
-      const match = candidates[0] || null;
+      const bestCandidate = candidates[0] || null;
+      const confidence = evaluateMatchConfidence(
+        candidates,
+        matchMinScore,
+        matchMinMargin
+      );
+      const match = confidence.accepted ? bestCandidate : null;
 
       response.json({
         ok: true,
         ocrText: text,
         match,
         candidates,
+        confidence,
       });
     } catch (error) {
       next(error);

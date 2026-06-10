@@ -1,6 +1,36 @@
-# Phase 1: MVP Scan And Quantity Flow
+# Phase 1: MVP Scan And Identify Flow
 
-Phase 1 builds the smallest useful end-to-end system.
+Phase 1 builds the smallest useful read-only scan-and-identify system.
+
+## Progress Checklist
+
+### Firmware
+
+- [x] Build firmware for the nulllab ESP32-S3-CAM and legacy AI Thinker target.
+- [x] Connect to Wi-Fi and discover the service through mDNS or a fallback host.
+- [x] Capture a real camera frame and upload it on the scan control.
+- [x] Discard stale frames and shut down the camera between scans.
+- [x] Report scan states and errors over serial.
+- [x] Display scan status, accepted identification results, and inventory
+  quantity through the ESP-hosted handheld web console.
+
+### Service And Inventory
+
+- [x] Implement health, scan, and job-diagnostics endpoints.
+- [x] Reject scan requests without an image.
+- [x] Run Tesseract OCR and fuzzy inventory matching.
+- [x] Fetch Airtable inventory records with the configured credentials.
+- [x] Advertise the service through mDNS.
+- [x] Persist scan diagnostics and expose the scan gallery.
+- [x] Return ranked candidates corresponding to Airtable inventory records.
+- [x] Keep Airtable access read-only during the MVP.
+
+### Exit Criteria
+
+- [x] A handheld scan sends an actual camera image to the service.
+- [x] The service returns OCR output and ranked Airtable inventory candidates.
+- [x] The handheld web console displays identification results.
+- [x] Service discovery and configured fallback-host recovery work.
 
 ## Goals
 
@@ -8,9 +38,9 @@ Phase 1 builds the smallest useful end-to-end system.
 - Device can discover or connect to the Segtori server.
 - Server can OCR the image with the system `tesseract` binary.
 - Server can fetch Airtable inventory records.
-- Server can fuzzy-match OCR text to the closest inventory item name.
-- Device can display the best match and current quantity.
-- Device can adjust quantity with the D-pad and send the update.
+- Server can fuzzy-match OCR text to ranked inventory candidates.
+- Handheld web console can display identification results and current quantity.
+- Airtable remains a read-only inventory source during the MVP.
 
 ## Delivery Approach
 
@@ -29,7 +59,10 @@ Required endpoints:
 
 - `GET /api/health`: returns readiness and basic service metadata.
 - `POST /api/scan`: accepts an uploaded image, runs OCR, fetches inventory records, and returns recognized text plus the best inventory match.
-- `POST /api/items/:id/quantity`: updates the matched inventory item quantity.
+
+The existing quantity-update endpoint is outside Phase 1 acceptance. Airtable
+write access remains disabled until it is explicitly enabled after safe
+quantity workflows are validated against the Phase 4 local inventory backend.
 
 `POST /api/scan` should return:
 
@@ -56,14 +89,15 @@ Required flow:
 
 1. Join the configured Wi-Fi network.
 2. Discover the server through mDNS, falling back to a configured host if needed.
-3. Initialize camera, display, primary scan button, and D-pad.
+3. Initialize the camera, scan control, and handheld web console.
 4. On scan button press, capture a still image.
 5. Upload the image to `POST /api/scan`.
-6. Show OCR/matching progress on the display.
-7. Show the best item match and current quantity.
-8. Use D-pad up/down to change quantity.
-9. Use confirm/select to submit the quantity update.
-10. Show success or failure feedback.
+6. Show OCR/matching progress and identification results in the web console.
+7. Show success or failure feedback.
+
+Physical display, dedicated control, and quantity-edit workflows are deferred
+to Phase 5. Camera orientation and enclosure validation are deferred to Phase
+6.
 
 ## Container Direction
 
@@ -79,9 +113,9 @@ The Phase 1 container setup should also become reproducible:
 ## Acceptance Criteria
 
 - Pressing the device scan button sends an actual camera image to the server.
-- The server returns OCR output and a best inventory match.
-- The displayed item ID or name corresponds to an Airtable record.
-- Quantity edits from the device update Airtable.
+- The server returns OCR output and ranked Airtable inventory candidates.
+- The handheld web console displays scan and identification results.
+- Airtable access remains read-only.
 - The server can be found without hard-coding an IP address when mDNS is available.
 - A configured server host fallback exists for networks where mDNS is unavailable.
 
@@ -98,6 +132,11 @@ portion of the flow on the nulllab ESP32-S3-CAM:
   camera is shut down while idle.
 - The service runs Tesseract and persists each image plus job diagnostics.
 - A service-hosted local gallery allows manual inspection of uploaded jobs.
+- Airtable credentials provide read access to inventory records, and scan
+  results include ranked candidates from those records.
+- The ESP-hosted handheld web console displays scan state, OCR output,
+  identification candidates, quantity, confidence, and timing feedback.
 
-Phase 1 is not complete until valid Airtable credentials demonstrate matching
-and quantity updates, and the final display/D-pad workflow is implemented.
+Phase 1 is complete. Recognition accuracy and uncertain-match behavior continue
+in Phase 2; writable local inventory, physical controls, and enclosure work
+remain in later phases.
