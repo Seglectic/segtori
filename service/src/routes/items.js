@@ -7,8 +7,20 @@
 
 const express = require("express");
 
-function createItemsRouter({ updateItemQuantity }) {
+function createItemsRouter({ getInventoryCapabilities, listInventoryItems, updateItemQuantity }) {
   const router = express.Router();
+
+  router.get("/", async (_request, response, next) => {
+    try {
+      response.json({
+        ok: true,
+        capabilities: getInventoryCapabilities(),
+        items: await listInventoryItems(),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/:id/quantity", async (request, response, next) => {
     try {
@@ -39,4 +51,3 @@ function createItemsRouter({ updateItemQuantity }) {
 module.exports = {
   createItemsRouter,
 };
-

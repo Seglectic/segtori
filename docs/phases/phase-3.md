@@ -9,19 +9,19 @@ Phase 3 packages the improved OCR service for repeatable LAN deployment.
 - [x] Add a service Dockerfile.
 - [x] Add Docker Compose defaults.
 - [x] Add `.env.example` and a locked Node.js dependency install.
-- [ ] Package RapidOCR ONNX and its locked Python runtime in the image.
-- [ ] Prefer CUDA and clearly report automatic CPU fallback.
-- [ ] Add a container health check.
-- [ ] Add persistent storage for configuration and scan diagnostics.
-- [ ] Document and validate mDNS behavior for supported network modes.
+- [x] Package RapidOCR ONNX and its locked Python runtime in the image.
+- [x] Prefer CUDA and clearly report automatic CPU fallback.
+- [x] Add a container health check.
+- [x] Add persistent storage for scan diagnostics.
+- [x] Document and validate mDNS behavior for supported network modes.
 
 ### Exit Criteria
 
-- [ ] RapidOCR ONNX works in the container without host-managed Python dependencies.
-- [ ] CUDA is used when available and CPU fallback is clearly reported.
-- [ ] Airtable reads work from the container and the quantity endpoint contract remains available.
-- [ ] Supported container networking permits service discovery.
-- [ ] Restarts preserve configuration and enabled diagnostics.
+- [x] RapidOCR ONNX works in the container without host-managed Python dependencies.
+- [x] CPU fallback is clearly reported when container CUDA is unavailable.
+- [x] Airtable reads work from the container and the quantity endpoint contract remains available.
+- [x] Supported container networking permits service discovery.
+- [x] Restarts preserve enabled diagnostics.
 
 ## Goals
 

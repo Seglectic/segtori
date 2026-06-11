@@ -16,7 +16,7 @@ summarizes current work, measurements, and the immediate queue.
 - [x] [Phase 0: Project Scaffolding](./phases/phase-0.md)
 - [x] [Phase 1: MVP Scan And Identify Flow](./phases/phase-1.md)
 - [x] [Phase 2: Scan Accuracy And Matching](./phases/phase-2.md)
-- [ ] [Phase 3: Containerized Network Service](./phases/phase-3.md) - in progress
+- [x] [Phase 3: Containerized Network Service](./phases/phase-3.md)
 - [ ] [Phase 4: Local Inventory Backend](./phases/phase-4.md)
 - [ ] [Phase 5: Device UX And Provisioning](./phases/phase-5.md)
 - [ ] [Phase 6: Hardware And Field Readiness](./phases/phase-6.md)

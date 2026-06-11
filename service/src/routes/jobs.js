@@ -90,9 +90,9 @@ function renderDashboard(config) {
   <style>
     :root{color-scheme:dark;--bg:#0b1012;--panel:#12191d;--line:#2b373c;--text:#edf4ef;--muted:#98a9a2;--accent:#d4ff67;--bad:#ff8d8d;--warn:#ffca72}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
-    button{font:inherit}header,main,.feed-state{width:min(1400px,94vw);margin:auto}header{padding:22px 0 16px;display:flex;justify-content:space-between;gap:20px;align-items:end;border-bottom:1px solid var(--line)}
+    button{font:inherit}a{color:inherit}header,main,.feed-state{width:min(1400px,94vw);margin:auto}header{padding:22px 0 16px;display:flex;justify-content:space-between;gap:20px;align-items:end;border-bottom:1px solid var(--line)}
     h1{margin:4px 0 0;font:700 clamp(1.6rem,3vw,2.4rem)/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em}.sub,time,dt{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
-    .header-tools{display:flex;align-items:center;gap:14px}.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:7px}.live.connected{background:var(--accent);animation:pulse 1.8s ease-in-out infinite}.close{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:9px 12px;cursor:pointer;text-transform:uppercase;font-size:11px;letter-spacing:.08em}.close:hover{border-color:var(--accent);color:var(--accent)}
+    .header-tools{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.nav-link,.live-shell,.close{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:9px 12px;cursor:pointer;text-transform:uppercase;font-size:11px;letter-spacing:.08em;text-decoration:none}.nav-link:hover,.close:hover{border-color:var(--accent);color:var(--accent)}.live-shell{cursor:default}.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:7px}.live.connected{background:var(--accent);animation:pulse 1.8s ease-in-out infinite}
     main{padding:18px 0 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;align-items:start}.job{height:420px;background:var(--panel);border:1px solid var(--line);min-width:0;display:flex;flex-direction:column}.job.updated{animation:flash 1.2s ease-out}
     .thumbnail{position:relative;flex:none;display:block;width:100%;height:240px;border:0;border-bottom:1px solid var(--line);padding:0;background:#070a0b;cursor:pointer;overflow:hidden}.thumbnail img{width:100%;height:100%;display:block;object-fit:cover}.thumbnail:hover img{filter:brightness(1.08)}
     .card-info{flex:1;min-height:0;padding:12px;position:relative;display:flex;flex-direction:column}.card-top,.meta{display:flex;justify-content:space-between;gap:12px;align-items:center;min-width:0}.card-top b{color:var(--accent);font-size:11px;white-space:nowrap}.card-title{display:flex;align-items:flex-start;gap:8px;margin:10px 0 12px;min-height:2.7em;flex:none}.card-title h2{margin:0;font-size:.9rem;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.card-title a{flex:none;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;padding-top:2px}.card-title a:hover{color:var(--accent)}.card-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0;flex:none}.card-qty{color:var(--accent);font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}.card-link{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}.card-link:hover{color:var(--accent)}.card-confidence{position:absolute;left:8px;top:8px;z-index:2;pointer-events:none;padding:5px 7px;border:1px solid rgba(0,0,0,.9);background:rgba(0,0,0,.92);color:var(--accent);font-size:11px;white-space:nowrap}.card-confidence[data-empty="true"]{background:rgba(0,0,0,.78);color:var(--muted)}.card-foot{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;padding-top:10px;margin-top:auto;flex:none}.card-id{display:flex;flex-direction:column;gap:2px;min-width:0}.card-id span{font-size:10px;letter-spacing:.05em}.card-date{color:var(--muted);font-size:10px;letter-spacing:.05em;text-transform:uppercase}.card-delete{border:1px solid var(--line);background:var(--panel);color:var(--muted);display:inline-grid;place-items:center;width:28px;height:28px;border-radius:999px;cursor:pointer;flex:none}.card-delete:hover{border-color:var(--bad);color:var(--bad)}.status{display:inline-block;padding:2px 7px;border:1px solid currentColor;text-transform:uppercase;font-size:10px;letter-spacing:.08em}.ok{color:var(--accent)}.bad{color:var(--bad)}.warn{color:var(--warn)}.empty{padding:24px;border:1px solid var(--line)}
@@ -105,7 +105,7 @@ function renderDashboard(config) {
   <div class="dropzone" id="dropzone" aria-hidden="true">Drop images to scan</div>
   <header>
     <div><div class="sub">Seglectic Tagged Object Recognition Interface</div><h1>Scan Jobs</h1></div>
-    <div class="header-tools"><div class="sub"><span class="live"></span><span id="connection">Connecting</span> · <span id="loaded">0</span> loaded · ${config.serviceName}:${config.port}</div></div>
+    <div class="header-tools"><a class="nav-link" href="/">Inventory</a><div class="sub live-shell"><span class="live"></span><span id="connection">Connecting</span> · <span id="loaded">0</span> loaded · ${config.serviceName}:${config.port}</div></div>
   </header>
   <main id="jobs"></main>
   <div class="feed-state" id="feed-state">Loading scans</div>
@@ -392,7 +392,7 @@ function createJobsRouter(config, scanJobStore = null) {
   const router = express.Router();
   const ingestDir = config.scanJobs.ingestDir;
 
-  router.get("/", (_request, response) => {
+  router.get("/log", (_request, response) => {
     response.type("html").send(renderDashboard(config));
   });
 
@@ -517,4 +517,5 @@ function createJobsRouter(config, scanJobStore = null) {
 module.exports = {
   createJobsRouter,
   pageJobs,
+  renderDashboard,
 };

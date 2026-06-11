@@ -5,11 +5,12 @@ it when a capability is demonstrated end to end, not merely scaffolded.
 
 ## Current Position
 
-- Active phase: **Phase 3: Containerized Network Service**
+- Active phase: **Phase 4: Local Inventory Backend**
 - Phase 0: complete
 - Phase 1: complete
 - Phase 2: complete
-- Phase 3: in progress
+- Phase 3: complete
+- Phase 4: in progress
 
 Phase 1 is complete as a read-only scan-and-identify MVP. Airtable inventory
 reads and ranked OCR-to-inventory candidates are available for Phase 2 accuracy
@@ -195,22 +196,33 @@ hardware-validation work.
 
 ## Phase 3: Containerized Network Service
 
-The existing Docker files are scaffolding, not a working deployment target.
-The image currently copies only the Node.js source while runtime configuration
-defaults to the host-managed ONNX/CUDA worker. Phase 3 will package RapidOCR
-ONNX directly and will not install Tesseract. Tesseract remains only as a
-legacy host-run diagnostic fallback outside the supported container path. The
-container also does not yet provide a health check, persist diagnostics, or
-validate mDNS networking.
+The production image now packages Node.js, Python, the locked RapidOCR ONNX
+environment, CUDA/cuDNN runtime libraries, and the warmed worker without
+depending on host-managed Python packages or Tesseract. It includes a Docker
+health check and persists scan diagnostics through `service/process`.
+
+An isolated CPU-fallback container completed a real 4.2 MB scan, read Airtable,
+returned the exact `S-4920` match, reported `ocrProvider: cpu`, and retained the
+job through a container restart. The final 2.32 GB image runs as the
+unprivileged `node` user and grants write access only to persisted diagnostics
+and RapidOCR's model-selection directory.
+
+The initial container CUDA error 999 came from a stale NVIDIA CDI spec that
+referenced UVM device major 236 after the host changed to major 237.
+Regenerating `/etc/cdi/nvidia.yaml` restored CUDA execution for all three OCR
+models. A steady GPU scan completed OCR in 42 ms and the full server request in
+280 ms.
+
+The host-network GPU container advertised `tori.local:8674` on the LAN. The
+ESP32 discovered `192.168.1.219:8674` through mDNS and received HTTP 200 from
+the container health endpoint, completing Phase 3 service-discovery validation.
 
 ## Next Work Queue
 
-1. Package the locked RapidOCR ONNX worker and runtime in the image.
-2. Prefer CUDA and clearly report automatic CPU fallback.
-3. Add a container health check and persistent scan-diagnostics volume.
-4. Validate Airtable reads and the firmware-facing API from the container.
-5. Document and test host-network and bridge-network mDNS behavior.
-6. Verify restart persistence and run an end-to-end firmware scan.
+1. Add `INVENTORY_BACKEND` selection and the SQLite local inventory backend.
+2. Add the one-time Airtable-to-local migration path for empty databases.
+3. Enable writable quantity controls and item creation in local mode.
+4. Validate the existing scan and quantity contracts against local mode.
 
 ## Tracking Approach
 

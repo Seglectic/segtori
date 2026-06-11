@@ -1,7 +1,23 @@
+# ╭──────────────────────────────╮
+# │  Segtori Host Deployment     │
+# │  Runs ONNX OCR with LAN mDNS │
+# │  and persistent diagnostics. │
+# ╰──────────────────────────────╯
+
 services:
   tori-service:
+    image: segtori-service:local
     build: .
-    ports:
-      - "8674:8674"
+    network_mode: host
+    restart: unless-stopped
     env_file:
       - .env
+    environment:
+      OCR_BACKEND: onnx
+      ONNX_PROVIDER: auto
+      ONNX_PYTHON_PATH: /opt/segtori-onnx/bin/python
+      ONNX_WORKER_PATH: /app/onnx/worker.py
+      SCAN_JOB_INGEST_DIR: /app/process
+      SCAN_DEBUG_DIR: /app/process
+    volumes:
+      - ./process:/app/process

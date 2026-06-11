@@ -7,6 +7,7 @@
 import argparse
 import json
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 from time import perf_counter
 
@@ -24,6 +25,9 @@ def parse_args() -> argparse.Namespace:
 
 def select_cuda(provider: str, available_providers: list[str]) -> bool:
     cuda_available = "CUDAExecutionProvider" in available_providers
+
+    if sys.platform.startswith("linux") and not Path("/dev/nvidiactl").exists():
+        cuda_available = False
 
     if provider == "cuda" and not cuda_available:
         raise RuntimeError("CUDAExecutionProvider was requested but is unavailable")
@@ -47,12 +51,15 @@ def build_engine(provider: str) -> tuple[RapidOCR, dict[str, object]]:
     available_providers = onnxruntime.get_available_providers()
     use_cuda = select_cuda(provider, available_providers)
     started_at = perf_counter()
-    engine = RapidOCR(
-        params={
-            "EngineConfig.onnxruntime.use_cuda": use_cuda,
-            "Global.log_level": "error",
-        }
-    )
+    # RapidOCR prints provider fallback notices to stdout, which is reserved
+    # for the worker's line-oriented JSON protocol.
+    with redirect_stdout(sys.stderr):
+        engine = RapidOCR(
+            params={
+                "EngineConfig.onnxruntime.use_cuda": use_cuda,
+                "Global.log_level": "error",
+            }
+        )
     providers_by_model = model_providers(engine)
     cuda_active = all(
         providers and providers[0] == "CUDAExecutionProvider"

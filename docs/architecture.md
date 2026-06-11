@@ -24,7 +24,8 @@ The firmware should keep local state small:
 
 ## Service
 
-The service is responsible for OCR, inventory lookup, and inventory mutation:
+The service is responsible for OCR, inventory lookup, inventory mutation, and
+the local operator-facing inventory surface:
 
 - Advertise itself on the network with mDNS.
 - Receive image uploads from the ESP32.
@@ -34,8 +35,9 @@ The service is responsible for OCR, inventory lookup, and inventory mutation:
 - Match OCR text to the closest inventory item.
 - Return the best match to the device.
 - Update item quantity by inventory ID.
+- Serve an inventory console for local operators.
 - Persist scan images, results, and failure diagnostics for local inspection.
-- Serve a local development dashboard for browsing persisted scan jobs.
+- Serve a diagnostic scan log for browsing persisted scan jobs.
 
 For Phase 1, the service can call the host `tesseract` binary directly. Phase 3
 containers standardize on the warmed RapidOCR ONNX worker instead of installing
@@ -150,21 +152,28 @@ Planned local inventory endpoints:
 - `GET /api/items`: lists inventory items.
 - `POST /api/items`: creates a local inventory item.
 - `POST /api/import`: imports local CSV or JSON inventory data.
+- `POST /api/items/import-airtable`: migrates Airtable inventory into an empty
+  local SQLite database after explicit operator confirmation.
 
 Planned diagnostic endpoint:
 
 - `GET /api/scans/:id`: returns scan diagnostics when debug mode is enabled.
 
-Current Phase 1 development endpoints:
+Current development endpoints:
 
-- `GET /`: serves a live, incrementally loaded gallery of persisted scan jobs.
+- `GET /`: serves the primary inventory console.
+- `GET /log`: serves a live, incrementally loaded gallery of persisted scan jobs.
 - `GET /api/jobs`: lists persisted scan jobs in cursor-paginated batches.
 - `GET /api/jobs/:id`: returns one persisted scan job.
 - `GET /jobs/:id/image`: returns the original image for a persisted scan job.
 - `WS /ws/jobs`: publishes ingested, completed, and failed scan-job updates.
 
-These endpoints expose development diagnostics and are not part of the
-firmware-facing API contract.
+The inventory console should render against either Airtable or the future local
+SQLite backend. Quantity controls should only appear when the active backend
+supports writes. When local mode is selected and the database is empty, the
+inventory console may offer a one-time Airtable migration prompt if Airtable
+reads are configured and successful. The diagnostic endpoints expose
+development state and are not part of the firmware-facing API contract.
 
 The service advertises `tori.local` as its default mDNS host so the dashboard
 is reachable on the LAN at `http://tori.local:8674/`.

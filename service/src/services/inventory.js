@@ -17,6 +17,17 @@ function getConfig() {
   return config;
 }
 
+function getInventoryCapabilities() {
+  return {
+    backend: "airtable",
+    label: "Airtable",
+    canAdjustQuantity: false,
+    canCreateItems: false,
+    supportsImport: false,
+    supportsExport: false,
+  };
+}
+
 function getHeaders(config) {
   return {
     Authorization: `Bearer ${config.airtable.apiToken}`,
@@ -165,6 +176,7 @@ async function updateItemQuantity(id, quantity) {
 }
 
 module.exports = {
+  getInventoryCapabilities,
   listInventoryItems,
   updateItemQuantity,
 };

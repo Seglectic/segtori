@@ -1,0 +1,9 @@
+# ╭──────────────────────────────╮
+# │  Segtori GPU Deployment      │
+# │  Exposes NVIDIA hardware to  │
+# │  the automatic ONNX provider.│
+# ╰──────────────────────────────╯
+
+services:
+  tori-service:
+    gpus: all

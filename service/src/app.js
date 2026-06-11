@@ -9,11 +9,16 @@ const express = require("express");
 
 const { createHealthRouter } = require("./routes/health");
 const { createItemsRouter } = require("./routes/items");
+const { createInventoryRouter } = require("./routes/inventory");
 const { createJobsRouter } = require("./routes/jobs");
 const { createMatchTextRouter } = require("./routes/match-text");
 const { createScanRouter } = require("./routes/scan");
 const { startMdnsAdvertisement } = require("./services/discovery");
-const { listInventoryItems, updateItemQuantity } = require("./services/inventory");
+const {
+  getInventoryCapabilities,
+  listInventoryItems,
+  updateItemQuantity,
+} = require("./services/inventory");
 const {
   evaluateMatchConfidence,
   rankInventoryMatches,
@@ -38,6 +43,7 @@ function createApp(config, logger = console) {
 
   app.use(express.json());
 
+  app.use("/", createInventoryRouter(config));
   app.use("/", createJobsRouter(config, scanJobStore));
   app.use("/api/health", createHealthRouter(config, runtime));
   app.use(
@@ -69,6 +75,8 @@ function createApp(config, logger = console) {
   app.use(
     "/api/items",
     createItemsRouter({
+      getInventoryCapabilities,
+      listInventoryItems,
       updateItemQuantity,
     })
   );

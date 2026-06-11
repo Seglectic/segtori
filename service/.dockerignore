@@ -1,4 +1,7 @@
 node_modules
 npm-debug.log
 scan-debug
-
+.env
+onnx/.venv
+onnx/__pycache__
+process
